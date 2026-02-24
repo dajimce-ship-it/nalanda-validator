@@ -28,14 +28,25 @@ export const appRouter = router({
     save: protectedProcedure
       .input(z.object({
         username: z.string().min(1),
-        password: z.string().min(1),
+        password: z.string(), // puede estar vacío si se mantiene la actual
         monthsBack: z.number().min(1).max(24).default(6),
       }))
       .mutation(async ({ ctx, input }) => {
-        const enc = encrypt(input.password);
+        // Si no se proporciona contraseña nueva, mantener la existente
+        let passwordEnc: string | undefined;
+        if (input.password && input.password !== "KEEP_EXISTING" && input.password.trim().length > 0) {
+          passwordEnc = encrypt(input.password);
+        } else {
+          // Obtener la contraseña cifrada existente
+          const existing = await getCredentials(ctx.user.id);
+          if (!existing) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "La contraseña es obligatoria para la primera configuración" });
+          }
+          passwordEnc = existing.nalandaPasswordEnc;
+        }
         await saveCredentials(ctx.user.id, {
           nalandaUsername: input.username,
-          nalandaPasswordEnc: enc,
+          nalandaPasswordEnc: passwordEnc,
           monthsBack: input.monthsBack,
         });
         return { success: true };

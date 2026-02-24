@@ -5,6 +5,30 @@ const NALANDA_URL = "https://app.nalandaglobal.com";
 const PENDING_URL = `${NALANDA_URL}/obra-guiada/verObrasConJornadasPendientes.action`;
 const PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(process.env.HOME || "/home/ubuntu", ".playwright");
 
+function findChromiumExecutable(): string | undefined {
+  const base = PLAYWRIGHT_BROWSERS_PATH;
+  // Rutas posibles en orden de preferencia
+  const candidates = [
+    // headless shell (más ligero)
+    path.join(base, "chromium_headless_shell-1208", "chrome-headless-shell-linux64", "chrome-headless-shell"),
+    path.join(base, "chromium_headless_shell-1148", "chrome-headless-shell-linux64", "chrome-headless-shell"),
+    // chromium completo
+    path.join(base, "chromium-1208", "chrome-linux64", "chrome"),
+    path.join(base, "chromium-1148", "chrome-linux", "chrome"),
+    // sistema
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/usr/bin/google-chrome",
+  ];
+  for (const c of candidates) {
+    try {
+      const fs = require("fs");
+      if (fs.existsSync(c)) return c;
+    } catch { /* ignorar */ }
+  }
+  return undefined;
+}
+
 export type LogLevel = "info" | "success" | "warning" | "error";
 
 export type LogEntry = {
@@ -257,10 +281,12 @@ export async function runNalandaAutomation(
 
   try {
     log(callbacks, "info", "Iniciando navegador...");
+    const executablePath = findChromiumExecutable();
+    log(callbacks, "info", `Usando navegador: ${executablePath || "auto-detectado por Playwright"}`);
     browser = await chromium.launch({
       headless: true,
-      executablePath: `${PLAYWRIGHT_BROWSERS_PATH}/chromium_headless_shell-1208/chrome-linux/headless_shell`,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      ...(executablePath ? { executablePath } : {}),
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
     });
 
     const context = await browser.newContext({
