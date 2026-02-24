@@ -7,6 +7,10 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { runEmitter, isRunActive } from "../automation/runner";
+import { getRunLogs, getRunById } from "../db";
+import { jwtVerify } from "jose";
+import { COOKIE_NAME } from "@shared/const";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -35,6 +39,67 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+
+  // SSE endpoint para streaming de logs en tiempo real
+  app.get("/api/runs/:runId/stream", async (req, res) => {
+    const runId = parseInt(req.params.runId);
+    if (isNaN(runId)) { res.status(400).json({ error: "Invalid runId" }); return; }
+
+    // Verificar autenticación via cookie
+    const cookieHeader = req.headers.cookie || "";
+    const sessionMatch = cookieHeader.match(/session=([^;]+)/);
+    if (!sessionMatch) { res.status(401).json({ error: "Unauthorized" }); return; }
+    try {
+      const secret = new TextEncoder().encode(process.env.JWT_SECRET || "");
+      await jwtVerify(sessionMatch[1], secret);
+    } catch {
+      res.status(401).json({ error: "Invalid session" }); return;
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.flushHeaders();
+
+    // Enviar logs históricos primero
+    const existingLogs = await getRunLogs(runId);
+    for (const log of existingLogs) {
+      res.write(`data: ${JSON.stringify({ level: log.level, message: log.message, timestamp: log.createdAt })}\n\n`);
+    }
+
+    // Si la ejecución ya terminó, enviar done y cerrar
+    const run = await getRunById(runId);
+    if (run && (run.status === "completed" || run.status === "failed")) {
+      res.write(`data: ${JSON.stringify({ type: "done", status: run.status, summary: run.summary })}\n\n`);
+      res.end();
+      return;
+    }
+
+    // Suscribirse a nuevos logs en tiempo real
+    const onLog = (entry: { level: string; message: string; timestamp: Date }) => {
+      res.write(`data: ${JSON.stringify(entry)}\n\n`);
+    };
+    const onDone = (data: { status: string; summary?: unknown; error?: string }) => {
+      res.write(`data: ${JSON.stringify({ type: "done", ...data })}\n\n`);
+      cleanup();
+      res.end();
+    };
+
+    const cleanup = () => {
+      runEmitter.off(`run:${runId}`, onLog);
+      runEmitter.off(`run:${runId}:done`, onDone);
+    };
+
+    runEmitter.on(`run:${runId}`, onLog);
+    runEmitter.on(`run:${runId}:done`, onDone);
+
+    // Heartbeat para mantener la conexión viva
+    const heartbeat = setInterval(() => { res.write(`: heartbeat\n\n`); }, 15000);
+
+    req.on("close", () => { cleanup(); clearInterval(heartbeat); });
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

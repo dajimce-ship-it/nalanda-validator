@@ -1,17 +1,7 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, json } from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
- */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +15,60 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+// Credenciales de Nalanda Global (cifradas en servidor)
+export const nalandaCredentials = mysqlTable("nalanda_credentials", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  nalandaUsername: varchar("nalandaUsername", { length: 320 }).notNull(),
+  nalandaPasswordEnc: text("nalandaPasswordEnc").notNull(), // AES-256 cifrado
+  monthsBack: int("monthsBack").default(6).notNull(), // cuántos meses revisar
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type NalandaCredentials = typeof nalandaCredentials.$inferSelect;
+export type InsertNalandaCredentials = typeof nalandaCredentials.$inferInsert;
+
+// Ejecuciones del proceso de automatización
+export const executionRuns = mysqlTable("execution_runs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  status: mysqlEnum("status", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
+  triggeredBy: mysqlEnum("triggeredBy", ["manual", "scheduled"]).default("manual").notNull(),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  finishedAt: timestamp("finishedAt"),
+  durationMs: int("durationMs"),
+  summary: json("summary"), // { totalValidated, daysByDate, monthsReviewed, errors }
+  errorMessage: text("errorMessage"),
+});
+
+export type ExecutionRun = typeof executionRuns.$inferSelect;
+export type InsertExecutionRun = typeof executionRuns.$inferInsert;
+
+// Logs de cada ejecución (streaming en tiempo real)
+export const executionLogs = mysqlTable("execution_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  runId: int("runId").notNull(),
+  level: mysqlEnum("level", ["info", "success", "warning", "error"]).default("info").notNull(),
+  message: text("message").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ExecutionLog = typeof executionLogs.$inferSelect;
+export type InsertExecutionLog = typeof executionLogs.$inferInsert;
+
+// Programación de ejecuciones automáticas
+export const scheduleConfig = mysqlTable("schedule_config", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  enabled: boolean("enabled").default(false).notNull(),
+  cronExpression: varchar("cronExpression", { length: 100 }).default("0 8 * * 1-5").notNull(), // L-V a las 8:00
+  timezone: varchar("timezone", { length: 64 }).default("Europe/Madrid").notNull(),
+  nextRunAt: timestamp("nextRunAt"),
+  lastRunAt: timestamp("lastRunAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ScheduleConfig = typeof scheduleConfig.$inferSelect;
+export type InsertScheduleConfig = typeof scheduleConfig.$inferInsert;
