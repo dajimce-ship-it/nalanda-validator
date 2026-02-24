@@ -1,0 +1,88 @@
+{
+  "query": "SELECT id, status, triggeredBy, startedAt, finishedAt, durationMs, errorMessage FROM execution_runs ORDER BY startedAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26MKFXK3NHGK4Mm.8bc37402212b --database nv4gyYQKYkRgZu6uoTERXf --execute SELECT id, status, triggeredBy, startedAt, finishedAt, durationMs, errorMessage FROM execution_runs ORDER BY startedAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "7",
+      "status": "completed",
+      "triggeredBy": "manual",
+      "startedAt": "2026-02-24 14:22:20",
+      "finishedAt": "2026-02-24 14:22:53",
+      "durationMs": "33111",
+      "errorMessage": "NULL"
+    },
+    {
+      "id": "6",
+      "status": "failed",
+      "triggeredBy": "manual",
+      "startedAt": "2026-02-24 14:21:26",
+      "finishedAt": "2026-02-24 14:21:26",
+      "durationMs": "7",
+      "errorMessage": "browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell"
+    },
+    {
+      "id": "5",
+      "status": "failed",
+      "triggeredBy": "manual",
+      "startedAt": "2026-02-24 14:21:21",
+      "finishedAt": "2026-02-24 14:21:22",
+      "durationMs": "17",
+      "errorMessage": "browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell"
+    },
+    {
+      "id": "4",
+      "status": "failed",
+      "triggeredBy": "manual",
+      "startedAt": "2026-02-24 14:20:59",
+      "finishedAt": "2026-02-24 14:21:00",
+      "durationMs": "6",
+      "errorMessage": "browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell"
+    },
+    {
+      "id": "3",
+      "status": "failed",
+      "triggeredBy": "manual",
+      "startedAt": "2026-02-24 14:20:54",
+      "finishedAt": "2026-02-24 14:20:55",
+      "durationMs": "94",
+      "errorMessage": "browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell"
+    }
+  ],
+  "messages": [
+    "╔═════════════════════════════════════════════════════════════════════════╗",
+    "║ Looks like Playwright Test or Playwright was just installed or updated. ║",
+    "║ Please run the following command to download new browsers:              ║",
+    "║                                                                         ║",
+    "║     npx playwright install                                              ║",
+    "║                                                                         ║",
+    "║ <3 Playwright Team                                                      ║",
+    "╚═════════════════════════════════════════════════════════════════════════╝",
+    "╔═════════════════════════════════════════════════════════════════════════╗",
+    "║ Looks like Playwright Test or Playwright was just installed or updated. ║",
+    "║ Please run the following command to download new browsers:              ║",
+    "║                                                                         ║",
+    "║     npx playwright install                                              ║",
+    "║                                                                         ║",
+    "║ <3 Playwright Team                                                      ║",
+    "╚═════════════════════════════════════════════════════════════════════════╝",
+    "╔═════════════════════════════════════════════════════════════════════════╗",
+    "║ Looks like Playwright Test or Playwright was just installed or updated. ║",
+    "║ Please run the following command to download new browsers:              ║",
+    "║                                                                         ║",
+    "║     npx playwright install                                              ║",
+    "║                                                                         ║",
+    "║ <3 Playwright Team                                                      ║",
+    "╚═════════════════════════════════════════════════════════════════════════╝",
+    "╔═════════════════════════════════════════════════════════════════════════╗",
+    "║ Looks like Playwright Test or Playwright was just installed or updated. ║",
+    "║ Please run the following command to download new browsers:              ║",
+    "║                                                                         ║",
+    "║     npx playwright install                                              ║",
+    "║                                                                         ║",
+    "║ <3 Playwright Team                                                      ║",
+    "╚═════════════════════════════════════════════════════════════════════════╝"
+  ],
+  "stdout": "id\tstatus\ttriggeredBy\tstartedAt\tfinishedAt\tdurationMs\terrorMessage\n7\tcompleted\tmanual\t2026-02-24 14:22:20\t2026-02-24 14:22:53\t33111\tNULL\n6\tfailed\tmanual\t2026-02-24 14:21:26\t2026-02-24 14:21:26\t7\tbrowserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell\n╔═════════════════════════════════════════════════════════════════════════╗\n║ Looks like Playwright Test or Playwright was just installed or updated. ║\n║ Please run the following command to download new browsers:              ║\n║                                                                         ║\n║     npx playwright install                                              ║\n║                                                                         ║\n║ <3 Playwright Team                                                      ║\n╚═════════════════════════════════════════════════════════════════════════╝\n5\tfailed\tmanual\t2026-02-24 14:21:21\t2026-02-24 14:21:22\t17\tbrowserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell\n╔═════════════════════════════════════════════════════════════════════════╗\n║ Looks like Playwright Test or Playwright was just installed or updated. ║\n║ Please run the following command to download new browsers:              ║\n║                                                                         ║\n║     npx playwright install                                              ║\n║                                                                         ║\n║ <3 Playwright Team                                                      ║\n╚═════════════════════════════════════════════════════════════════════════╝\n4\tfailed\tmanual\t2026-02-24 14:20:59\t2026-02-24 14:21:00\t6\tbrowserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell\n╔═════════════════════════════════════════════════════════════════════════╗\n║ Looks like Playwright Test or Playwright was just installed or updated. ║\n║ Please run the following command to download new browsers:              ║\n║                                                                         ║\n║     npx playwright install                                              ║\n║                                                                         ║\n║ <3 Playwright Team                                                      ║\n╚═════════════════════════════════════════════════════════════════════════╝\n3\tfailed\tmanual\t2026-02-24 14:20:54\t2026-02-24 14:20:55\t94\tbrowserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell\n╔═════════════════════════════════════════════════════════════════════════╗\n║ Looks like Playwright Test or Playwright was just installed or updated. ║\n║ Please run the following command to download new browsers:              ║\n║                                                                         ║\n║     npx playwright install                                              ║\n║                                                                         ║\n║ <3 Playwright Team                                                      ║\n╚═════════════════════════════════════════════════════════════════════════╝\n",
+  "stderr": "",
+  "execution_time_ms": 51
+}

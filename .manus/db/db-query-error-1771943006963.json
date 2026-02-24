@@ -1,0 +1,8 @@
+{
+  "query": "\nSELECT id, status, triggered_by, started_at, finished_at, duration_ms, error_message \nFROM execution_runs \nORDER BY started_at DESC \nLIMIT 5;\n\nSELECT el.run_id, el.level, el.message, el.created_at \nFROM execution_logs el\nWHERE el.run_id = (SELECT id FROM execution_runs ORDER BY started_at DESC LIMIT 1)\nORDER BY el.created_at ASC;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26MKFXK3NHGK4Mm.8bc37402212b --database nv4gyYQKYkRgZu6uoTERXf --execute \nSELECT id, status, triggered_by, started_at, finished_at, duration_ms, error_message \nFROM execution_runs \nORDER BY started_at DESC \nLIMIT 5;\n\nSELECT el.run_id, el.level, el.message, el.created_at \nFROM execution_logs el\nWHERE el.run_id = (SELECT id FROM execution_runs ORDER BY started_at DESC LIMIT 1)\nORDER BY el.created_at ASC;\n",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 2: Unknown column 'triggered_by' in 'field list'"
+  ]
+}

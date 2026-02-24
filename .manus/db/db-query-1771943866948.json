@@ -1,0 +1,28 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26MKFXK3NHGK4Mm.8bc37402212b --database nv4gyYQKYkRgZu6uoTERXf --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_nv4gyYQKYkRgZu6uoTERXf": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_nv4gyYQKYkRgZu6uoTERXf": "execution_logs"
+    },
+    {
+      "Tables_in_nv4gyYQKYkRgZu6uoTERXf": "execution_runs"
+    },
+    {
+      "Tables_in_nv4gyYQKYkRgZu6uoTERXf": "nalanda_credentials"
+    },
+    {
+      "Tables_in_nv4gyYQKYkRgZu6uoTERXf": "schedule_config"
+    },
+    {
+      "Tables_in_nv4gyYQKYkRgZu6uoTERXf": "users"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_nv4gyYQKYkRgZu6uoTERXf\n__drizzle_migrations\nexecution_logs\nexecution_runs\nnalanda_credentials\nschedule_config\nusers\n",
+  "stderr": "",
+  "execution_time_ms": 45
+}
