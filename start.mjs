@@ -1,19 +1,20 @@
 #!/usr/bin/env node
 /**
  * Script de inicio para producción.
- * Garantiza que Chromium de Playwright esté disponible antes de arrancar el servidor.
- * No depende de NODE_ENV - verifica directamente si el ejecutable existe.
+ * Usa PLAYWRIGHT_BROWSERS_PATH para descargar Chromium en el directorio del proyecto,
+ * donde el servidor tiene permisos de escritura garantizados.
  */
 import { execSync } from 'child_process';
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
+import { join } from 'path';
 
 function log(msg) {
   console.log(`[start] ${msg}`);
 }
 
 async function ensureChromium() {
-  // 1. Verificar rutas del sistema (Linux)
+  // 1. Verificar rutas del sistema (Linux) - disponibles en dev/sandbox
   const systemPaths = [
     '/usr/bin/chromium-browser',
     '/usr/bin/chromium',
@@ -29,6 +30,7 @@ async function ensureChromium() {
   }
 
   // 2. Verificar si Playwright ya tiene su propio Chromium instalado
+  // (respeta PLAYWRIGHT_BROWSERS_PATH si está configurado)
   try {
     const { chromium } = await import('playwright');
     const execPath = chromium.executablePath();
@@ -37,21 +39,42 @@ async function ensureChromium() {
       return;
     }
     log(`Chromium de Playwright NO encontrado en: ${execPath}`);
+    log(`PLAYWRIGHT_BROWSERS_PATH = ${process.env.PLAYWRIGHT_BROWSERS_PATH || '(no configurado)'}`);
   } catch (e) {
     log(`No se pudo verificar Chromium de Playwright: ${e.message}`);
   }
 
-  // 3. No hay Chromium disponible → instalar
-  log('Instalando Chromium de Playwright (primera ejecución en este servidor)...');
+  // 3. No hay Chromium disponible → instalar en la ruta configurada
+  const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH || join(process.cwd(), '.browsers');
+  log(`Instalando Chromium en: ${browsersPath}`);
+  log('Esto solo ocurre la primera vez y puede tardar 1-2 minutos...');
+  
   try {
-    execSync('npx playwright install chromium', {
+    execSync('npx playwright install chromium --with-deps', {
       stdio: 'inherit',
       timeout: 300000, // 5 minutos
+      env: {
+        ...process.env,
+        PLAYWRIGHT_BROWSERS_PATH: browsersPath,
+      },
     });
     log('Chromium instalado correctamente');
   } catch (e) {
-    log(`ADVERTENCIA: No se pudo instalar Chromium: ${e.message}`);
-    log('El servidor arrancará pero la automatización puede fallar al intentar lanzar el navegador');
+    log(`Error instalando con --with-deps, intentando sin dependencias del sistema...`);
+    try {
+      execSync('npx playwright install chromium', {
+        stdio: 'inherit',
+        timeout: 300000,
+        env: {
+          ...process.env,
+          PLAYWRIGHT_BROWSERS_PATH: browsersPath,
+        },
+      });
+      log('Chromium instalado correctamente (sin dependencias del sistema)');
+    } catch (e2) {
+      log(`ADVERTENCIA: No se pudo instalar Chromium: ${e2.message}`);
+      log('El servidor arrancará pero la automatización puede fallar');
+    }
   }
 }
 
