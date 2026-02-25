@@ -58,3 +58,5 @@
 - [x] Limpiar run huérfano 210002
 - [x] Corregir parseo de fechas con corchetes (split/join en lugar de regex)
 - [x] Corregir selector de botones para usar solo botones visibles (boundingBox > 0)
+- [x] Diagnosticar fallo por hibernación del sandbox (run 210006) - solucionado publicando la app
+- [x] Cambiar el fondo de la app a azul

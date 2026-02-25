@@ -1,0 +1,31 @@
+{
+  "query": "SELECT id, status, startedAt, finishedAt, errorMessage FROM execution_runs ORDER BY id DESC LIMIT 3;\nSELECT level, message FROM execution_logs WHERE runId = (SELECT id FROM execution_runs ORDER BY id DESC LIMIT 1) ORDER BY createdAt ASC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26MKFXK3NHGK4Mm.8bc37402212b --database nv4gyYQKYkRgZu6uoTERXf --execute SELECT id, status, startedAt, finishedAt, errorMessage FROM execution_runs ORDER BY id DESC LIMIT 3;\nSELECT level, message FROM execution_logs WHERE runId = (SELECT id FROM execution_runs ORDER BY id DESC LIMIT 1) ORDER BY createdAt ASC;",
+  "rows": [
+    {
+      "id": "210006",
+      "status": "failed",
+      "startedAt": "2026-02-25 20:26:29",
+      "finishedAt": "2026-02-25 20:26:45",
+      "errorMessage": "Ejecución interrumpida: el servidor se reinició mientras el proceso estaba en curso"
+    },
+    {
+      "id": "210005",
+      "status": "completed",
+      "startedAt": "2026-02-25 20:15:54",
+      "finishedAt": "2026-02-25 20:17:41",
+      "errorMessage": "NULL"
+    },
+    {
+      "id": "210004",
+      "status": "failed",
+      "startedAt": "2026-02-25 20:03:01",
+      "finishedAt": "2026-02-25 20:08:18",
+      "errorMessage": "Ejecución interrumpida: el servidor se reinició mientras el proceso estaba en curso"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tstatus\tstartedAt\tfinishedAt\terrorMessage\n210006\tfailed\t2026-02-25 20:26:29\t2026-02-25 20:26:45\tEjecución interrumpida: el servidor se reinició mientras el proceso estaba en curso\n210005\tcompleted\t2026-02-25 20:15:54\t2026-02-25 20:17:41\tNULL\n210004\tfailed\t2026-02-25 20:03:01\t2026-02-25 20:08:18\tEjecución interrumpida: el servidor se reinició mientras el proceso estaba en curso\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}
