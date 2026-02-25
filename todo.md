@@ -60,3 +60,4 @@
 - [x] Corregir selector de botones para usar solo botones visibles (boundingBox > 0)
 - [x] Diagnosticar fallo por hibernación del sandbox (run 210006) - solucionado publicando la app
 - [x] Cambiar el fondo de la app a azul
+- [ ] Diagnosticar y corregir el fallo al publicar la app
