@@ -68,3 +68,7 @@
 - [x] Bloquear el botón "Iniciar validación" hasta que Chromium esté listo
 - [x] Investigar por qué falla Chromium en producción: PLAYWRIGHT_BROWSERS_PATH apuntaba a ruta sin permisos
 - [x] Configurar PLAYWRIGHT_BROWSERS_PATH=/usr/src/app/.browsers para instalar Chromium en el directorio del proyecto
+- [x] Crear Dockerfile con Chromium para Railway (multi-stage build, todas las dependencias del sistema)
+- [x] Crear .dockerignore y railway.toml para configuración de Railway
+- [x] Añadir endpoint /api/health para healthcheck de Railway
+- [ ] Exportar a GitHub y desplegar en Railway (pendiente acción del usuario)

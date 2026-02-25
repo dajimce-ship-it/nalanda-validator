@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Script de inicio para producción.
- * Usa PLAYWRIGHT_BROWSERS_PATH para descargar Chromium en el directorio del proyecto,
- * donde el servidor tiene permisos de escritura garantizados.
+ * Verifica que Chromium esté disponible antes de arrancar el servidor.
+ * En Railway/Docker, Chromium ya está instalado en PLAYWRIGHT_BROWSERS_PATH.
+ * En otros entornos, intenta instalarlo automáticamente.
  */
 import { execSync } from 'child_process';
 import { spawn } from 'child_process';

@@ -40,6 +40,11 @@ async function startServer() {
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
 
+  // Health check endpoint para Railway/Docker
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   // SSE endpoint para streaming de logs en tiempo real
   app.get("/api/runs/:runId/stream", async (req, res) => {
     const runId = parseInt(req.params.runId);

@@ -1,0 +1,11 @@
+node_modules
+.pnpm-store
+dist
+.env
+.env.*
+*.log
+.git
+.gitignore
+.browsers
+.manus-logs
+README.md
