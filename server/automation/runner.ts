@@ -55,25 +55,23 @@ function sendError(message) {
 }
 
 function findChromiumExecutable() {
-  // Primero intentar el binario de Playwright (disponible en produccion)
-  const playwrightPaths = [
-    // Playwright chromium headless shell (instalado por postinstall)
-    '/home/ubuntu/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell',
-    '/root/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell',
-    // Playwright chromium normal
-    '/home/ubuntu/.cache/ms-playwright/chromium-1208/chrome-linux/chrome',
-    '/root/.cache/ms-playwright/chromium-1208/chrome-linux/chrome',
-    // Rutas de sistema como fallback
+  // Intentar obtener la ruta del ejecutable de Playwright automaticamente
+  try {
+    const path = chromium.executablePath();
+    if (path) { accessSync(path); return path; }
+  } catch { /* continuar */ }
+  // Fallback: rutas conocidas del sistema
+  const systemPaths = [
     '/usr/bin/chromium-browser',
     '/usr/lib/chromium-browser/chromium-browser',
     '/usr/bin/chromium',
     '/usr/bin/google-chrome',
     '/usr/bin/google-chrome-stable',
   ];
-  for (const p of playwrightPaths) {
+  for (const p of systemPaths) {
     try { accessSync(p); return p; } catch { /* siguiente */ }
   }
-  // Ultimo recurso: dejar que Playwright encuentre el ejecutable automaticamente
+  // Dejar que Playwright use su propio binario sin especificar ruta
   return null;
 }
 
