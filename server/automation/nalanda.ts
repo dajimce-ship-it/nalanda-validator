@@ -1,6 +1,7 @@
 import { Browser, BrowserContext, Page, chromium } from "playwright";
 import { spawn } from "child_process";
 import { promisify } from "util";
+import { accessSync } from "fs";
 const sleep = promisify(setTimeout);
 
 const NALANDA_URL = "https://app.nalandaglobal.com";
@@ -291,7 +292,7 @@ export async function runNalandaAutomation(
       // Estrategia 2: lanzar nuestro propio Chromium del sistema
       log(callbacks, "info", "Puerto CDP no disponible, lanzando Chromium propio...");
       const chromiumExec = CHROMIUM_PATHS.find(p => {
-        try { require("fs").accessSync(p); return true; } catch { return false; }
+        try { accessSync(p); return true; } catch { return false; }
       });
       if (!chromiumExec) throw new Error("No se encontró Chromium instalado en el sistema");
 
