@@ -9,12 +9,19 @@ const PENDING_URL = `${NALANDA_URL}/obra-guiada/verObrasConJornadasPendientes.ac
 const CDP_URL = "http://localhost:9222";
 // Puerto alternativo para Chromium propio si el sistema no tiene el 9222 activo
 const OWN_CDP_PORT = 9333;
-// Rutas posibles del Chromium del sistema
+// Rutas posibles del Chromium del sistema y de Playwright
 const CHROMIUM_PATHS = [
+  // Sistema (instalado)
+  "/usr/lib/chromium-browser/chromium-browser",
   "/usr/bin/chromium-browser",
   "/usr/bin/chromium",
-  "/usr/lib/chromium-browser/chromium-browser",
   "/usr/bin/google-chrome",
+  // Playwright - headless shell (más ligero)
+  "/home/ubuntu/.playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell",
+  "/home/ubuntu/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell",
+  // Playwright - Chromium completo
+  "/home/ubuntu/.playwright/chromium-1208/chrome-linux64/chrome",
+  "/home/ubuntu/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome",
 ];
 
 export type LogLevel = "info" | "success" | "warning" | "error";
