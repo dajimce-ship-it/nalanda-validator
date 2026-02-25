@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { execSync } from "child_process";
+import { existsSync } from "fs";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -10,6 +12,27 @@ import {
 } from "./db";
 import { encrypt, decrypt } from "./automation/crypto";
 import { startRun } from "./automation/runner";
+
+// Verificar si Chromium está disponible en el sistema
+function getChromiumStatus(): { ready: boolean; message: string } {
+  // Rutas del sistema
+  const systemPaths = [
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+  ];
+  for (const p of systemPaths) {
+    if (existsSync(p)) return { ready: true, message: "Chromium listo" };
+  }
+  // Ruta de Playwright
+  try {
+    const { chromium } = require("playwright");
+    const execPath: string = chromium.executablePath();
+    if (existsSync(execPath)) return { ready: true, message: "Chromium listo" };
+  } catch {}
+  return { ready: false, message: "Chromium no instalado. El servidor lo instalará automáticamente al iniciar la primera ejecución (puede tardar 1-2 minutos)." };
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -74,6 +97,13 @@ export const appRouter = router({
       } catch {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Error al descifrar las credenciales" });
       }
+    }),
+  }),
+
+  // ── Estado del sistema ────────────────────────────────────────────────────
+  system2: router({
+    chromiumStatus: protectedProcedure.query(() => {
+      return getChromiumStatus();
     }),
   }),
 

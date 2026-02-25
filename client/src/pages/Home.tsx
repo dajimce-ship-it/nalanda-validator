@@ -50,8 +50,17 @@ export default function Home() {
 
   const { data: credentials } = trpc.credentials.get.useQuery();
   const { data: recentRuns } = trpc.runs.list.useQuery({ limit: 5 });
+  const { data: chromiumStatus } = trpc.system2.chromiumStatus.useQuery(
+    undefined,
+    { refetchInterval: (query) => (query.state.data?.ready ? false : 10000) }
+  );
+  const [chromiumReady, setChromiumReady] = useState<boolean | null>(null);
   const startRunMutation = trpc.runs.start.useMutation();
   const utils = trpc.useUtils();
+
+  useEffect(() => {
+    if (chromiumStatus) setChromiumReady(chromiumStatus.ready);
+  }, [chromiumStatus]);
 
   // Auto-scroll al final del log
   useEffect(() => {
@@ -98,6 +107,9 @@ export default function Home() {
       navigate("/credentials");
       return;
     }
+    if (chromiumReady === false) {
+      return; // bloqueado hasta que Chromium esté listo
+    }
     setLogs([]);
     setSummary(null);
     setProgress(0);
@@ -141,6 +153,27 @@ export default function Home() {
           </Badge>
         </div>
 
+        {/* Estado de Chromium */}
+        {chromiumStatus && !chromiumStatus.ready && (
+          <Card className="border-amber-400 bg-amber-950/30">
+            <CardContent className="flex items-center gap-3 pt-4 pb-4">
+              <Loader2 className="h-5 w-5 text-amber-400 shrink-0 animate-spin" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-300">Preparando el sistema...</p>
+                <p className="text-xs text-amber-400/80 mt-0.5">El navegador automatizado se está instalando. Esto solo ocurre la primera vez y tarda 1-2 minutos. La página se actualizará automáticamente cuando esté listo.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        {chromiumStatus?.ready && (
+          <Card className="border-emerald-600/40 bg-emerald-950/20">
+            <CardContent className="flex items-center gap-3 pt-3 pb-3">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <p className="text-sm text-emerald-300">Sistema listo. Puedes ejecutar la validación.</p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Estado de credenciales */}
         {!credentials && (
           <Card className="border-amber-200 bg-amber-50">
@@ -177,10 +210,13 @@ export default function Home() {
                     size="lg"
                     className="w-full gap-2"
                     onClick={handleStart}
-                    disabled={isRunning || !credentials}
+                    disabled={isRunning || !credentials || chromiumReady === false}
                   >
-                    <Play className="h-4 w-4" />
-                    Iniciar validación
+                    {chromiumReady === false ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Preparando sistema...</>
+                    ) : (
+                      <><Play className="h-4 w-4" /> Iniciar validación</>
+                    )}
                   </Button>
                 </CardContent>
               </Card>

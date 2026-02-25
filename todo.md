@@ -63,3 +63,6 @@
 - [x] Diagnosticar y corregir el fallo al publicar la app (eliminado postinstall pesado de Playwright)
 - [x] Corregir timeout de publicación: script start.mjs instala Chromium solo si no está disponible
 - [x] Simular producción y corregir fallo: start.mjs instala Chromium automáticamente si no está disponible
+- [x] Añadir endpoint tRPC `system2.chromiumStatus` que verifique si Chromium está listo
+- [x] Mostrar indicador de estado en la UI del panel de control (listo / instalando)
+- [x] Bloquear el botón "Iniciar validación" hasta que Chromium esté listo
