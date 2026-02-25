@@ -1,0 +1,19 @@
+{
+  "query": "SELECT * FROM nalanda_credentials LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26MKFXK3NHGK4Mm.8bc37402212b --database nv4gyYQKYkRgZu6uoTERXf --execute SELECT * FROM nalanda_credentials LIMIT 1;",
+  "rows": [
+    {
+      "id": "1",
+      "userId": "1",
+      "nalandaUsername": "djimenez@grupocobra.com",
+      "nalandaPasswordEnc": "3ad5123432c1bf7fb8a306d4b260a53a:5bffcadc4a051b4ffac7809a0f8d76f0:88aef5d398d7a7606938cb4c50",
+      "monthsBack": "6",
+      "createdAt": "2026-02-24 14:14:09",
+      "updatedAt": "2026-02-24 14:21:16"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tnalandaUsername\tnalandaPasswordEnc\tmonthsBack\tcreatedAt\tupdatedAt\n1\t1\tdjimenez@grupocobra.com\t3ad5123432c1bf7fb8a306d4b260a53a:5bffcadc4a051b4ffac7809a0f8d76f0:88aef5d398d7a7606938cb4c50\t6\t2026-02-24 14:14:09\t2026-02-24 14:21:16\n",
+  "stderr": "",
+  "execution_time_ms": 48
+}

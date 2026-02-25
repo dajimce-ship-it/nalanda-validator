@@ -1,28 +1,11 @@
 import { Browser, BrowserContext, Page, chromium } from "playwright";
-import { spawn } from "child_process";
+import { execSync } from "child_process";
 import { promisify } from "util";
-import { accessSync } from "fs";
+import { existsSync } from "fs";
 const sleep = promisify(setTimeout);
 
 const NALANDA_URL = "https://app.nalandaglobal.com";
 const PENDING_URL = `${NALANDA_URL}/obra-guiada/verObrasConJornadasPendientes.action`;
-const CDP_URL = "http://localhost:9222";
-// Puerto alternativo para Chromium propio si el sistema no tiene el 9222 activo
-const OWN_CDP_PORT = 9333;
-// Rutas posibles del Chromium del sistema y de Playwright
-const CHROMIUM_PATHS = [
-  // Sistema (instalado)
-  "/usr/lib/chromium-browser/chromium-browser",
-  "/usr/bin/chromium-browser",
-  "/usr/bin/chromium",
-  "/usr/bin/google-chrome",
-  // Playwright - headless shell (más ligero)
-  "/home/ubuntu/.playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell",
-  "/home/ubuntu/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell",
-  // Playwright - Chromium completo
-  "/home/ubuntu/.playwright/chromium-1208/chrome-linux64/chrome",
-  "/home/ubuntu/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome",
-];
 
 export type LogLevel = "info" | "success" | "warning" | "error";
 
@@ -69,21 +52,64 @@ function getMonthsToReview(monthsBack: number): { label: string; sampleDate: str
   return months;
 }
 
+/**
+ * Obtiene el ejecutable de Chromium de forma robusta.
+ * 1. Usa chromium.executablePath() de Playwright (siempre correcto para el entorno actual)
+ * 2. Si el archivo no existe, instala Chromium automáticamente con npx playwright install
+ * 3. Devuelve la ruta verificada
+ */
+async function getChromiumExecutable(callbacks: AutomationCallbacks): Promise<string> {
+  // Obtener la ruta que Playwright espera para este entorno
+  const execPath = chromium.executablePath();
+  log(callbacks, "info", `Ruta Playwright Chromium: ${execPath}`);
+
+  if (existsSync(execPath)) {
+    log(callbacks, "success", `Chromium encontrado en: ${execPath}`);
+    return execPath;
+  }
+
+  // No existe → instalar automáticamente
+  log(callbacks, "warning", "Chromium no encontrado. Instalando automáticamente (puede tardar 1-2 min)...");
+  try {
+    execSync("npx playwright install chromium --with-deps", {
+      stdio: "pipe",
+      timeout: 120000,
+      env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: process.env.HOME + "/.playwright" },
+    });
+    log(callbacks, "success", "Chromium instalado correctamente");
+  } catch (installErr) {
+    // Intentar sin --with-deps (por si falta permisos para deps del sistema)
+    try {
+      execSync("npx playwright install chromium", {
+        stdio: "pipe",
+        timeout: 120000,
+        env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: process.env.HOME + "/.playwright" },
+      });
+      log(callbacks, "success", "Chromium instalado (sin deps del sistema)");
+    } catch (e2) {
+      throw new Error(`No se pudo instalar Chromium: ${e2 instanceof Error ? e2.message : e2}`);
+    }
+  }
+
+  // Verificar que ahora sí existe
+  const newPath = chromium.executablePath();
+  if (!existsSync(newPath)) {
+    throw new Error(`Chromium instalado pero no encontrado en: ${newPath}`);
+  }
+  return newPath;
+}
+
 async function login(page: Page, username: string, password: string, callbacks: AutomationCallbacks): Promise<void> {
   log(callbacks, "info", "Navegando a Nalanda Global...");
   await page.goto(NALANDA_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
-
-  // Esperar a que cargue la página
   await page.waitForTimeout(2000);
 
-  // Verificar si ya estamos en la app (sesión activa)
   const currentUrl = page.url();
   if (currentUrl.includes("app.nalandaglobal.com") && !currentUrl.includes("identity.nalandaglobal.com")) {
     log(callbacks, "success", "Sesión ya activa, continuando...");
     return;
   }
 
-  // Esperar formulario de login
   try {
     await page.waitForSelector("#username", { timeout: 15000 });
   } catch {
@@ -114,7 +140,6 @@ async function login(page: Page, username: string, password: string, callbacks: 
 }
 
 async function getRedDaysFromCalendar(page: Page): Promise<string[]> {
-  // Abrir el calendario haciendo clic en el campo de fecha
   await page.click("#fecha");
   await page.waitForSelector(".ui-datepicker-calendar", { timeout: 8000 });
   await page.waitForTimeout(500);
@@ -127,7 +152,6 @@ async function getRedDaysFromCalendar(page: Page): Promise<string[]> {
       const a = (td as HTMLElement).querySelector("a");
       if (!a) return;
       const bg = window.getComputedStyle(a).backgroundColor;
-      // Rojo puro o variantes de rojo
       if (bg === "rgb(255, 0, 0)" || bg === "rgb(220, 53, 69)" || bg === "rgb(255, 68, 68)") {
         const month = parseInt((td as HTMLElement).getAttribute("data-month") || "0") + 1;
         const yr = (td as HTMLElement).getAttribute("data-year") || "";
@@ -138,7 +162,6 @@ async function getRedDaysFromCalendar(page: Page): Promise<string[]> {
     return days;
   });
 
-  // Cerrar el calendario
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
   return redDays;
@@ -156,14 +179,12 @@ async function processDay(
       await page.goto(`${PENDING_URL}?fechaStr=${date}`, { waitUntil: "domcontentloaded", timeout: 25000 });
       await page.waitForTimeout(1000);
 
-      // Verificar si hay obras pendientes
       const bodyText = await page.evaluate(() => document.body.textContent || "");
       if (bodyText.includes("There are no works with pending days") || bodyText.includes("no hay obras")) {
         log(callbacks, "info", `Día ${date}: sin partes pendientes`);
         return { date, workersValidated: 0, obras: [] };
       }
 
-      // Buscar botones de validación
       const validateButtons = await page.$$('a:has-text("Validate working days"), button:has-text("Validate working days")');
       if (validateButtons.length === 0) {
         log(callbacks, "warning", `Día ${date}: no se encontraron botones de validación`);
@@ -173,41 +194,34 @@ async function processDay(
       const obras: string[] = [];
       let totalWorkers = 0;
       const numObras = validateButtons.length;
-
       log(callbacks, "info", `Día ${date}: ${numObras} obra(s) con partes pendientes`);
 
-      // Procesar cada obra del día
       for (let i = 0; i < numObras; i++) {
-        // Recargar la página para obtener botones frescos
         await page.goto(`${PENDING_URL}?fechaStr=${date}`, { waitUntil: "domcontentloaded", timeout: 25000 });
         await page.waitForTimeout(1000);
 
         const btns = await page.$$('a:has-text("Validate working days"), button:has-text("Validate working days")');
         if (i >= btns.length) break;
 
-        // Obtener nombre de la obra
         const obraName = await btns[i].evaluate((el) => {
           const row = el.closest("tr") || el.closest("div") || el.parentElement;
           return row?.textContent?.replace(/\s+/g, " ").trim().substring(0, 80) || "Obra";
         });
 
-        log(callbacks, "info", `  Obra ${i + 1}/${numObras}: haciendo clic en Validate working days...`);
+        log(callbacks, "info", `  Obra ${i + 1}/${numObras}: validando...`);
         await btns[i].click();
 
-        // Esperar la página de validación
         try {
           await page.waitForURL((url) => url.toString().includes("mostrarJornadasValidables"), { timeout: 12000 });
         } catch {
           await page.waitForTimeout(2000);
         }
 
-        // Seleccionar todos los trabajadores con el checkbox del header
         const headerCheckbox = await page.$('thead input[type="checkbox"]');
         if (headerCheckbox) {
           await headerCheckbox.click();
           await page.waitForTimeout(500);
         } else {
-          // Seleccionar individualmente
           const checkboxes = await page.$$('tbody input[type="checkbox"]');
           for (const cb of checkboxes) {
             const isChecked = await cb.isChecked();
@@ -215,22 +229,17 @@ async function processDay(
           }
         }
 
-        // Contar trabajadores seleccionados
         const checkedCount = await page.$$eval('tbody input[type="checkbox"]:checked', (els) => els.length);
         totalWorkers += checkedCount;
         log(callbacks, "info", `  → ${checkedCount} trabajadores seleccionados`);
 
-        // Hacer clic en "Validate selected days"
         const validateBtn = await page.$(
           'button:has-text("Validate selected days"), a:has-text("Validate selected days"), #js-validar-seleccionadas'
         );
-        if (!validateBtn) {
-          throw new Error("No se encontró el botón 'Validate selected days'");
-        }
+        if (!validateBtn) throw new Error("No se encontró el botón 'Validate selected days'");
         await validateBtn.click();
         await page.waitForTimeout(1000);
 
-        // Confirmar primer diálogo (OK / Aceptar)
         try {
           const confirmBtn = await page.waitForSelector(
             '#btnConfirmacion, button:has-text("Ok"), button:has-text("OK")',
@@ -240,7 +249,6 @@ async function processDay(
           await page.waitForTimeout(800);
         } catch { /* puede no aparecer */ }
 
-        // Confirmar segundo diálogo (Aceptar)
         try {
           const okBtn = await page.waitForSelector(
             'button:has-text("Aceptar"), button:has-text("Accept")',
@@ -286,59 +294,34 @@ export async function runNalandaAutomation(
 
   let browser: Browser | null = null;
   let context: BrowserContext | null = null;
-  let ownChromiumProc: ReturnType<typeof spawn> | null = null;
 
   try {
     log(callbacks, "info", "Iniciando navegador...");
 
-    // Estrategia 1: conectar al Chromium del sistema via CDP (puerto 9222)
-    try {
-      browser = await chromium.connectOverCDP(CDP_URL, { timeout: 5000 });
-      log(callbacks, "success", "Navegador del sistema conectado (CDP)");
-    } catch {
-      // Estrategia 2: lanzar nuestro propio Chromium del sistema
-      log(callbacks, "info", "Puerto CDP no disponible, lanzando Chromium propio...");
-      // Diagnóstico: registrar qué rutas se están probando
-      const pathResults: string[] = [];
-      for (const p of CHROMIUM_PATHS) {
-        try { accessSync(p); pathResults.push(`OK:${p}`); } catch (e) { pathResults.push(`FAIL:${p}:${(e as Error).message}`); }
-      }
-      log(callbacks, "info", `Rutas Chromium probadas: ${pathResults.join(' | ')}`);
-      const chromiumExec = CHROMIUM_PATHS.find(p => {
-        try { accessSync(p); return true; } catch { return false; }
-      });
-      if (!chromiumExec) throw new Error(`No se encontró Chromium instalado en el sistema. Rutas probadas: ${pathResults.join(', ')}`);
+    // Obtener ejecutable de Chromium de forma robusta (con auto-install si falta)
+    const executablePath = await getChromiumExecutable(callbacks);
 
-      ownChromiumProc = spawn(chromiumExec, [
-        `--remote-debugging-port=${OWN_CDP_PORT}`,
+    // Lanzar Chromium directamente con Playwright (sin depender de CDP externo)
+    browser = await chromium.launch({
+      executablePath,
+      headless: true,
+      args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
-        "--headless=new",
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-extensions",
-        `--user-data-dir=/tmp/nalanda-chrome-${Date.now()}`,
-      ], { detached: false, stdio: "ignore" });
+        "--disable-background-networking",
+        "--disable-sync",
+        "--metrics-recording-only",
+        "--disable-default-apps",
+      ],
+    });
 
-      // Esperar a que el puerto esté disponible (hasta 10 segundos)
-      let connected = false;
-      for (let i = 0; i < 20; i++) {
-        await sleep(500);
-        try {
-          browser = await chromium.connectOverCDP(`http://localhost:${OWN_CDP_PORT}`, { timeout: 2000 });
-          connected = true;
-          break;
-        } catch { /* seguir esperando */ }
-      }
-      if (!connected || !browser) throw new Error("No se pudo conectar al Chromium propio tras 10 segundos");
-      log(callbacks, "success", "Chromium propio iniciado y conectado");
-    }
+    log(callbacks, "success", "Navegador iniciado correctamente");
 
-    if (!browser) throw new Error("No se pudo obtener una instancia del navegador");
-
-    // Crear un contexto aislado para no interferir con otras pestañas
     context = await browser.newContext({
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
     });
@@ -436,16 +419,10 @@ export async function runNalandaAutomation(
 
     return summary;
   } finally {
-    // Cerrar el contexto aislado
     if (context) {
       try { await context.close(); } catch { /* ignorar */ }
     }
-    // Si lanzamos nuestro propio Chromium, cerrarlo también
-    if (ownChromiumProc) {
-      try { ownChromiumProc.kill(); } catch { /* ignorar */ }
-    }
-    // Si es el Chromium del sistema (CDP), NO cerrarlo
-    if (browser && !ownChromiumProc) {
+    if (browser) {
       try { await browser.close(); } catch { /* ignorar */ }
     }
   }
