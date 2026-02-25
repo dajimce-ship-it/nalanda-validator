@@ -1,12 +1,32 @@
 import { Browser, BrowserContext, Page, chromium } from "playwright";
-import { execSync, spawnSync } from "child_process";
 import { promisify } from "util";
 const sleep = promisify(setTimeout);
 
 const NALANDA_URL = "https://app.nalandaglobal.com";
 const PENDING_URL = `${NALANDA_URL}/obra-guiada/verObrasConJornadasPendientes.action`;
-const CDP_PORT = 9222;
-const SYSTEM_CHROMIUM = "/usr/lib/chromium-browser/chromium-browser";
+
+// Rutas del ejecutable de Chromium del sistema (en orden de preferencia)
+const CHROMIUM_PATHS = [
+  "/usr/bin/chromium-browser",
+  "/usr/lib/chromium-browser/chromium-browser",
+  "/usr/bin/chromium",
+  "/usr/bin/google-chrome",
+];
+
+// Flags necesarios para correr en entorno sin display
+const CHROMIUM_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+  "--no-first-run",
+  "--no-zygote",
+  "--single-process",
+  "--disable-extensions",
+  "--disable-background-networking",
+  "--disable-default-apps",
+  "--mute-audio",
+];
 
 export type LogLevel = "info" | "success" | "warning" | "error";
 
@@ -54,59 +74,38 @@ function getMonthsToReview(monthsBack: number): { label: string; sampleDate: str
 }
 
 /**
- * Verifica si el puerto CDP está disponible y responde.
+ * Encuentra el ejecutable de Chromium disponible en el sistema.
  */
-async function isCdpAvailable(): Promise<boolean> {
-  try {
-    const res = await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`, {
-      signal: AbortSignal.timeout(2000),
-    });
-    return res.ok;
-  } catch {
-    return false;
+function findChromiumExecutable(): string {
+  const { accessSync } = require("fs");
+  for (const p of CHROMIUM_PATHS) {
+    try {
+      accessSync(p);
+      return p;
+    } catch {
+      // no existe, probar siguiente
+    }
   }
+  throw new Error(`No se encontró Chromium en ninguna ruta: ${CHROMIUM_PATHS.join(", ")}`);
 }
 
 /**
- * Asegura que el Chromium del sistema esté corriendo con el puerto CDP.
- * Si no está disponible, lo lanza como proceso separado.
+ * Lanza un navegador Chromium usando el binario del sistema.
+ * Esta es la estrategia más robusta: no depende del puerto CDP ni de binarios de Playwright.
  */
-async function ensureCdpAvailable(callbacks: AutomationCallbacks): Promise<void> {
-  if (await isCdpAvailable()) {
-    log(callbacks, "info", `Puerto CDP ${CDP_PORT} disponible`);
-    return;
-  }
+async function launchBrowser(callbacks: AutomationCallbacks): Promise<Browser> {
+  const executablePath = findChromiumExecutable();
+  log(callbacks, "info", `Usando Chromium: ${executablePath}`);
 
-  log(callbacks, "warning", `Puerto CDP ${CDP_PORT} no disponible. Lanzando Chromium del sistema...`);
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    args: CHROMIUM_ARGS,
+    timeout: 30000,
+  });
 
-  // Lanzar el Chromium del sistema con el puerto de debugging
-  spawnSync("bash", [
-    "-c",
-    `nohup ${SYSTEM_CHROMIUM} \
-      --headless=new \
-      --no-sandbox \
-      --disable-setuid-sandbox \
-      --disable-dev-shm-usage \
-      --disable-gpu \
-      --remote-debugging-port=${CDP_PORT} \
-      --remote-debugging-address=127.0.0.1 \
-      --no-first-run \
-      --no-default-browser-check \
-      --disable-extensions \
-      --user-data-dir=/tmp/nalanda-chrome-data \
-      about:blank &`,
-  ], { stdio: "ignore" });
-
-  // Esperar hasta 10 segundos a que el puerto esté disponible
-  for (let i = 0; i < 20; i++) {
-    await sleep(500);
-    if (await isCdpAvailable()) {
-      log(callbacks, "success", `Chromium del sistema iniciado en puerto ${CDP_PORT}`);
-      return;
-    }
-  }
-
-  throw new Error(`No se pudo iniciar Chromium del sistema en puerto ${CDP_PORT}`);
+  log(callbacks, "success", "Navegador iniciado correctamente");
+  return browser;
 }
 
 async function login(page: Page, username: string, password: string, callbacks: AutomationCallbacks): Promise<void> {
@@ -308,14 +307,10 @@ export async function runNalandaAutomation(
   try {
     log(callbacks, "info", "Iniciando navegador...");
 
-    // Asegurar que el Chromium del sistema está corriendo con CDP
-    await ensureCdpAvailable(callbacks);
+    // Lanzar Chromium del sistema directamente (estrategia más robusta)
+    browser = await launchBrowser(callbacks);
 
-    // Conectar al Chromium del sistema vía CDP (no lanzar uno nuevo)
-    browser = await chromium.connectOverCDP(`http://127.0.0.1:${CDP_PORT}`);
-    log(callbacks, "success", "Conectado al navegador del sistema vía CDP");
-
-    // Crear un contexto de incógnito aislado para no interferir con otras pestañas
+    // Crear un contexto aislado
     context = await browser.newContext({
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
     });
@@ -414,10 +409,12 @@ export async function runNalandaAutomation(
     return summary;
 
   } finally {
-    // Cerrar el contexto pero NO el navegador (es el del sistema)
+    // Cerrar contexto y navegador correctamente
     if (context) {
       try { await context.close(); } catch { /* ignorar */ }
     }
-    // NO cerrar browser.close() para no matar el Chromium del sistema
+    if (browser) {
+      try { await browser.close(); } catch { /* ignorar */ }
+    }
   }
 }

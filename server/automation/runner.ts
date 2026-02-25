@@ -1,9 +1,18 @@
 import { EventEmitter } from "events";
+import { spawn } from "child_process";
+import { createInterface } from "readline";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import { getDb } from "../db";
 import { executionRuns, executionLogs, nalandaCredentials, scheduleConfig } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import { decrypt } from "./crypto";
-import { runNalandaAutomation, LogEntry, RunSummary } from "./nalanda";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Ruta al worker .mjs que se ejecuta con node puro (no tsx)
+const WORKER_PATH = join(__dirname, "worker.mjs");
 
 // Singleton emitter para SSE
 export const runEmitter = new EventEmitter();
@@ -46,15 +55,15 @@ export async function startRun(userId: number, triggeredBy: "manual" | "schedule
   const { nalandaUsername, nalandaPasswordEnc, monthsBack } = creds[0];
   const password = decrypt(nalandaPasswordEnc);
 
-  // Ejecutar en background
+  // Ejecutar en background usando proceso hijo con node puro
   executeRun(runId, userId, nalandaUsername, password, monthsBack).catch(console.error);
 
   return runId;
 }
 
-async function addLog(db: Awaited<ReturnType<typeof getDb>>, runId: number, level: LogEntry["level"], message: string) {
+async function addLog(db: Awaited<ReturnType<typeof getDb>>, runId: number, level: string, message: string) {
   if (!db) return;
-  await db.insert(executionLogs).values({ runId, level, message, createdAt: new Date() });
+  await db.insert(executionLogs).values({ runId, level: level as any, message, createdAt: new Date() });
   runEmitter.emit(`run:${runId}`, { level, message, timestamp: new Date() });
 }
 
@@ -63,27 +72,70 @@ async function executeRun(runId: number, userId: number, username: string, passw
   if (!db) return;
 
   const startTime = Date.now();
-  let summary: RunSummary | null = null;
 
   try {
-    summary = await runNalandaAutomation(username, password, monthsBack, {
-      onLog: async (entry) => {
-        await addLog(db, runId, entry.level, entry.message);
-      },
-      onProgress: (percent) => {
-        runEmitter.emit(`run:${runId}:progress`, percent);
-      },
+    await new Promise<void>((resolve, reject) => {
+      // Lanzar el worker con node puro (no tsx) para evitar el bloqueo de Chromium
+      const child = spawn("node", [WORKER_PATH], {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env },
+      });
+
+      // Enviar parámetros al worker vía stdin
+      child.stdin.write(JSON.stringify({ username, password, monthsBack }));
+      child.stdin.end();
+
+      let summary: any = null;
+
+      // Leer logs del worker vía stdout (JSON lines)
+      const rl = createInterface({ input: child.stdout });
+      rl.on("line", async (line) => {
+        try {
+          const msg = JSON.parse(line);
+          if (msg.type === "log") {
+            await addLog(db, runId, msg.level, msg.message);
+          } else if (msg.type === "progress") {
+            runEmitter.emit(`run:${runId}:progress`, msg.percent);
+          } else if (msg.type === "result") {
+            summary = msg.summary;
+          } else if (msg.type === "error") {
+            reject(new Error(msg.message));
+          }
+        } catch { /* ignorar líneas no JSON */ }
+      });
+
+      // Capturar stderr para diagnóstico
+      let stderrOutput = "";
+      child.stderr.on("data", (data) => {
+        stderrOutput += data.toString();
+      });
+
+      child.on("close", async (code) => {
+        if (code === 0 && summary) {
+          const durationMs = Date.now() - startTime;
+          await db.update(executionRuns).set({
+            status: "completed",
+            finishedAt: new Date(),
+            durationMs,
+            summary: summary as any,
+          }).where(eq(executionRuns.id, runId));
+
+          runEmitter.emit(`run:${runId}:done`, { status: "completed", summary });
+          resolve();
+        } else if (code !== 0) {
+          const errMsg = stderrOutput.trim() || `Worker terminó con código ${code}`;
+          reject(new Error(errMsg));
+        } else {
+          // code === 0 pero no hay summary (error silencioso)
+          reject(new Error("El worker terminó sin resultado. Revisa los logs."));
+        }
+      });
+
+      child.on("error", (err) => {
+        reject(new Error(`Error al lanzar el worker: ${err.message}`));
+      });
     });
 
-    const durationMs = Date.now() - startTime;
-    await db.update(executionRuns).set({
-      status: "completed",
-      finishedAt: new Date(),
-      durationMs,
-      summary: summary as any,
-    }).where(eq(executionRuns.id, runId));
-
-    runEmitter.emit(`run:${runId}:done`, { status: "completed", summary });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     const durationMs = Date.now() - startTime;
