@@ -129,11 +129,16 @@ export default function Home() {
     <DashboardLayout>
       <div className="space-y-6 max-w-5xl">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Panel de control</h1>
-          <p className="text-muted-foreground mt-1">
-            Automatización de validación de partes pendientes en Nalanda Global
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Panel de control</h1>
+            <p className="text-muted-foreground mt-1">
+              Automatización de validación de partes pendientes en Nalanda Global
+            </p>
+          </div>
+          <Badge variant="outline" className="text-xs font-mono text-muted-foreground border-muted shrink-0 mt-1">
+            v2.5.0 · worker-inline
+          </Badge>
         </div>
 
         {/* Estado de credenciales */}

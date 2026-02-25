@@ -1,0 +1,73 @@
+{
+  "query": "SELECT * FROM execution_runs ORDER BY id DESC LIMIT 3;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26MKFXK3NHGK4Mm.8bc37402212b --database nv4gyYQKYkRgZu6uoTERXf --execute SELECT * FROM execution_runs ORDER BY id DESC LIMIT 3;",
+  "rows": [
+    {
+      "id": "150002",
+      "userId": "1",
+      "status": "failed",
+      "triggeredBy": "manual",
+      "startedAt": "2026-02-25 13:50:56",
+      "finishedAt": "2026-02-25 13:50:56",
+      "durationMs": "41",
+      "summary": "NULL",
+      "errorMessage": "file:///home/ubuntu/nalanda-validator/[eval1]:51"
+    },
+    {
+      "id": "150001",
+      "userId": "1",
+      "status": "failed",
+      "triggeredBy": "manual",
+      "startedAt": "2026-02-25 13:45:44",
+      "finishedAt": "2026-02-25 13:45:45",
+      "durationMs": "289",
+      "summary": "NULL",
+      "errorMessage": "node:internal/modules/cjs/loader:1386"
+    },
+    {
+      "id": "120002",
+      "userId": "1",
+      "status": "completed",
+      "triggeredBy": "manual",
+      "startedAt": "2026-02-25 10:30:54",
+      "finishedAt": "2026-02-25 10:31:22",
+      "durationMs": "28628",
+      "summary": "{\"daysByDate\": [], \"errors\": [], \"monthsReviewed\": [{\"month\": \"02/2026\", \"pendingFound\": false}, {\"month\": \"01/2026\", \"pendingFound\": false}], \"totalValidated\": 0}",
+      "errorMessage": "NULL"
+    }
+  ],
+  "messages": [
+    "    const { chromium: cr } = await import('playwright');",
+    "                             ^^^^^",
+    "SyntaxError: Unexpected reserved word",
+    "    at compileSourceTextModule (node:internal/modules/esm/utils:338:16)",
+    "    at ModuleLoader.eval (node:internal/modules/esm/loader:212:18)",
+    "    at node:internal/process/execution:68:24",
+    "    at asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:116:11)",
+    "    at Object.runEntryPointWithESMLoader (node:internal/modules/run_main:138:19)",
+    "    at evalModuleEntryPoint (node:internal/process/execution:67:47)",
+    "    at node:internal/main/eval_stdin:30:5",
+    "    at Socket.<anonymous> (node:internal/process/execution:237:5)",
+    "    at Socket.emit (node:events:536:35)",
+    "    at endReadableNT (node:internal/streams/readable:1698:12)",
+    "Node.js v22.13.0",
+    "  throw err;",
+    "  ^",
+    "Error: Cannot find module '/usr/src/app/dist/worker.mjs'",
+    "    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)",
+    "    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)",
+    "    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)",
+    "    at Function._load (node:internal/modules/cjs/loader:1192:37)",
+    "    at TracingChannel.traceSync (node:diagnostics_channel:322:14)",
+    "    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)",
+    "    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)",
+    "    at node:internal/main/run_main_module:36:49 {",
+    "  code: 'MODULE_NOT_FOUND',",
+    "  requireStack: []",
+    "}",
+    "Node.js v22.20.0"
+  ],
+  "stdout": "id\tuserId\tstatus\ttriggeredBy\tstartedAt\tfinishedAt\tdurationMs\tsummary\terrorMessage\n150002\t1\tfailed\tmanual\t2026-02-25 13:50:56\t2026-02-25 13:50:56\t41\tNULL\tfile:///home/ubuntu/nalanda-validator/[eval1]:51\n    const { chromium: cr } = await import('playwright');\n                             ^^^^^\n\nSyntaxError: Unexpected reserved word\n    at compileSourceTextModule (node:internal/modules/esm/utils:338:16)\n    at ModuleLoader.eval (node:internal/modules/esm/loader:212:18)\n    at node:internal/process/execution:68:24\n    at asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:116:11)\n    at Object.runEntryPointWithESMLoader (node:internal/modules/run_main:138:19)\n    at evalModuleEntryPoint (node:internal/process/execution:67:47)\n    at node:internal/main/eval_stdin:30:5\n    at Socket.<anonymous> (node:internal/process/execution:237:5)\n    at Socket.emit (node:events:536:35)\n    at endReadableNT (node:internal/streams/readable:1698:12)\n\nNode.js v22.13.0\n150001\t1\tfailed\tmanual\t2026-02-25 13:45:44\t2026-02-25 13:45:45\t289\tNULL\tnode:internal/modules/cjs/loader:1386\n  throw err;\n  ^\n\nError: Cannot find module '/usr/src/app/dist/worker.mjs'\n    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)\n    at Function._load (node:internal/modules/cjs/loader:1192:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)\n    at node:internal/main/run_main_module:36:49 {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: []\n}\n\nNode.js v22.20.0\n120002\t1\tcompleted\tmanual\t2026-02-25 10:30:54\t2026-02-25 10:31:22\t28628\t{\"daysByDate\": [], \"errors\": [], \"monthsReviewed\": [{\"month\": \"02/2026\", \"pendingFound\": false}, {\"month\": \"01/2026\", \"pendingFound\": false}], \"totalValidated\": 0}\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}

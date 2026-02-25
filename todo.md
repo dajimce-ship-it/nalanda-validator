@@ -44,3 +44,8 @@
 - [x] Tests de cifrado AES-256 (encrypt/decrypt)
 - [x] Tests de auth (logout, me)
 - [x] Tests de validación de inputs (credentials, schedule, runs)
+
+## Pendiente
+- [x] Añadir número de versión visible en el panel de control
+- [x] Corregir definitivamente el motor de automatización (fallo recurrente)
+- [x] Actualizar lógica de validación para usar flujo real de Nalanda (js-validar-parte + confirmación Aceptar)
