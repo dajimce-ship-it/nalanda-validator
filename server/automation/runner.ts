@@ -23,6 +23,7 @@ const activeRuns = new Map<number, boolean>();
 const WORKER_CODE = `
 import { chromium } from 'playwright';
 import { accessSync } from 'fs';
+import { execSync } from 'child_process';
 
 const NALANDA_URL = 'https://app.nalandaglobal.com';
 const PENDING_URL = NALANDA_URL + '/obra-guiada/verObrasConJornadasPendientes.action';
@@ -73,6 +74,18 @@ function findChromiumExecutable() {
   }
   // Dejar que Playwright use su propio binario sin especificar ruta
   return null;
+}
+
+async function installChromiumAndRetry() {
+  sendLog('info', 'Chromium no encontrado. Instalando...');
+  try {
+    execSync('npx playwright install chromium', { stdio: 'pipe', timeout: 300000 });
+    sendLog('success', 'Chromium instalado. Reintentando...');
+    return true;
+  } catch (e) {
+    sendLog('error', 'No se pudo instalar Chromium: ' + (e.message || String(e)));
+    return false;
+  }
 }
 
 function getMonthsToReview(monthsBack) {
@@ -363,7 +376,23 @@ async function main() {
     };
     if (executablePath) launchOptions.executablePath = executablePath;
 
-    browser = await chromium.launch(launchOptions);
+    try {
+      browser = await chromium.launch(launchOptions);
+    } catch (launchErr) {
+      // Si falla porque no hay Chromium, intentar instalarlo y reintentar
+      if (launchErr.message && launchErr.message.includes("Executable doesn't exist")) {
+        const installed = await installChromiumAndRetry();
+        if (installed) {
+          // Reintentar sin executablePath para que Playwright use el recién instalado
+          const retryOptions = { headless: true, args: CHROMIUM_ARGS, timeout: 30000 };
+          browser = await chromium.launch(retryOptions);
+        } else {
+          throw launchErr;
+        }
+      } else {
+        throw launchErr;
+      }
+    }
 
     sendLog('success', 'Navegador iniciado correctamente');
 

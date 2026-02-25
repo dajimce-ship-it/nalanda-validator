@@ -62,3 +62,4 @@
 - [x] Cambiar el fondo de la app a azul
 - [x] Diagnosticar y corregir el fallo al publicar la app (eliminado postinstall pesado de Playwright)
 - [x] Corregir timeout de publicación: script start.mjs instala Chromium solo si no está disponible
+- [x] Simular producción y corregir fallo: start.mjs instala Chromium automáticamente si no está disponible

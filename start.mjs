@@ -1,60 +1,68 @@
 #!/usr/bin/env node
 /**
  * Script de inicio para producción.
- * Instala Chromium de Playwright si no está disponible, luego arranca el servidor.
+ * Garantiza que Chromium de Playwright esté disponible antes de arrancar el servidor.
+ * No depende de NODE_ENV - verifica directamente si el ejecutable existe.
  */
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import { existsSync } from 'fs';
-import { createRequire } from 'module';
 
-const require = createRequire(import.meta.url);
-
-// Verificar si Chromium de Playwright está disponible
-let chromiumAvailable = false;
-try {
-  const { chromium } = await import('playwright');
-  const execPath = chromium.executablePath();
-  if (execPath && existsSync(execPath)) {
-    chromiumAvailable = true;
-    console.log('[start] Chromium disponible en:', execPath);
-  }
-} catch (e) {
-  console.log('[start] Playwright no puede encontrar Chromium:', e.message);
+function log(msg) {
+  console.log(`[start] ${msg}`);
 }
 
-// Si no está disponible, intentar instalar
-if (!chromiumAvailable) {
-  // Verificar rutas del sistema
+async function ensureChromium() {
+  // 1. Verificar rutas del sistema (Linux)
   const systemPaths = [
     '/usr/bin/chromium-browser',
     '/usr/bin/chromium',
     '/usr/bin/google-chrome',
     '/usr/bin/google-chrome-stable',
+    '/usr/local/bin/chromium',
   ];
-  const systemChromium = systemPaths.find(p => existsSync(p));
-  
-  if (systemChromium) {
-    console.log('[start] Usando Chromium del sistema:', systemChromium);
-  } else {
-    console.log('[start] Instalando Chromium de Playwright...');
-    try {
-      execSync('playwright install chromium', { 
-        stdio: 'inherit',
-        timeout: 300000 // 5 minutos
-      });
-      console.log('[start] Chromium instalado correctamente');
-    } catch (e) {
-      console.warn('[start] No se pudo instalar Chromium:', e.message);
-      console.warn('[start] El servidor arrancará pero la automatización puede fallar');
+  for (const p of systemPaths) {
+    if (existsSync(p)) {
+      log(`Chromium del sistema encontrado: ${p}`);
+      return;
     }
+  }
+
+  // 2. Verificar si Playwright ya tiene su propio Chromium instalado
+  try {
+    const { chromium } = await import('playwright');
+    const execPath = chromium.executablePath();
+    if (execPath && existsSync(execPath)) {
+      log(`Chromium de Playwright encontrado: ${execPath}`);
+      return;
+    }
+    log(`Chromium de Playwright NO encontrado en: ${execPath}`);
+  } catch (e) {
+    log(`No se pudo verificar Chromium de Playwright: ${e.message}`);
+  }
+
+  // 3. No hay Chromium disponible → instalar
+  log('Instalando Chromium de Playwright (primera ejecución en este servidor)...');
+  try {
+    execSync('npx playwright install chromium', {
+      stdio: 'inherit',
+      timeout: 300000, // 5 minutos
+    });
+    log('Chromium instalado correctamente');
+  } catch (e) {
+    log(`ADVERTENCIA: No se pudo instalar Chromium: ${e.message}`);
+    log('El servidor arrancará pero la automatización puede fallar al intentar lanzar el navegador');
   }
 }
 
+// Ejecutar verificación de Chromium
+await ensureChromium();
+
 // Arrancar el servidor principal
-console.log('[start] Arrancando servidor...');
+log('Arrancando servidor...');
 const server = spawn('node', ['dist/index.js'], {
   stdio: 'inherit',
-  env: { ...process.env, NODE_ENV: 'production' }
+  env: { ...process.env },
 });
 
 server.on('exit', (code) => {

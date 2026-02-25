@@ -1,0 +1,18 @@
+{
+  "query": "DESCRIBE execution_runs; SELECT id, status, started_at, duration_seconds, validated_count, error_message FROM execution_runs ORDER BY id DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26MKFXK3NHGK4Mm.8bc37402212b --database nv4gyYQKYkRgZu6uoTERXf --execute DESCRIBE execution_runs; SELECT id, status, started_at, duration_seconds, validated_count, error_message FROM execution_runs ORDER BY id DESC LIMIT 5;",
+  "returncode": 1,
+  "logs": [
+    "Field\tType\tNull\tKey\tDefault\tExtra",
+    "id\tint(11)\tNO\tPRI\tNULL\tauto_increment",
+    "userId\tint(11)\tNO\t\tNULL\t",
+    "status\tenum('pending','running','completed','failed')\tNO\t\tpending\t",
+    "triggeredBy\tenum('manual','scheduled')\tNO\t\tmanual\t",
+    "startedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\t",
+    "finishedAt\ttimestamp\tYES\t\tNULL\t",
+    "durationMs\tint(11)\tYES\t\tNULL\t",
+    "summary\tjson\tYES\t\tNULL\t",
+    "errorMessage\ttext\tYES\t\tNULL",
+    "ERROR 1054 (42S22) at line 1: Unknown column 'started_at' in 'field list'"
+  ]
+}
