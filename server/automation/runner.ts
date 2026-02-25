@@ -449,8 +449,23 @@ export async function startRun(userId: number, triggeredBy: "manual" | "schedule
     .orderBy(desc(executionRuns.startedAt))
     .limit(1);
 
+  // Si hay un run en estado "running" pero no está en el mapa de activos
+  // de esta instancia, es un huérfano de un reinicio anterior → limpiarlo.
   if (existingRun[0]?.status === "running") {
-    throw new Error("Ya hay una ejecución en curso");
+    if (!activeRuns.has(existingRun[0].id)) {
+      // Run huérfano: marcarlo como fallido y continuar
+      await db
+        .update(executionRuns)
+        .set({
+          status: "failed",
+          finishedAt: new Date(),
+          errorMessage:
+            "Ejecución interrumpida: el servidor se reinició mientras el proceso estaba en curso",
+        })
+        .where(eq(executionRuns.id, existingRun[0].id));
+    } else {
+      throw new Error("Ya hay una ejecución en curso");
+    }
   }
 
   const creds = await db.select().from(nalandaCredentials).where(eq(nalandaCredentials.userId, userId)).limit(1);
@@ -572,4 +587,46 @@ async function executeRun(runId: number, userId: number, username: string, passw
 
 export function isRunActive(runId: number): boolean {
   return activeRuns.has(runId);
+}
+
+/**
+ * Limpia runs que quedaron en estado "running" porque el servidor se reinició.
+ * Un run se considera huérfano si lleva más de 30 minutos sin actualizarse
+ * y no está en el mapa de ejecuciones activas de esta instancia.
+ * Se llama automáticamente al arrancar el servidor.
+ */
+export async function cleanupOrphanedRuns(): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    // Marcar como fallidos todos los runs en estado "running" que no están
+    // activos en esta instancia del servidor (es decir, son huérfanos de
+    // un reinicio anterior).
+    const { ne, and } = await import("drizzle-orm");
+    const runningRuns = await db
+      .select({ id: executionRuns.id })
+      .from(executionRuns)
+      .where(eq(executionRuns.status, "running"));
+
+    const orphans = runningRuns.filter((r) => !activeRuns.has(r.id));
+
+    if (orphans.length > 0) {
+      console.log(`[Runner] Limpiando ${orphans.length} run(s) huérfano(s)...`);
+      for (const orphan of orphans) {
+        await db
+          .update(executionRuns)
+          .set({
+            status: "failed",
+            finishedAt: new Date(),
+            errorMessage:
+              "Ejecución interrumpida: el servidor se reinició mientras el proceso estaba en curso",
+          })
+          .where(eq(executionRuns.id, orphan.id));
+      }
+      console.log(`[Runner] ${orphans.length} run(s) huérfano(s) limpiado(s)`);
+    }
+  } catch (err) {
+    console.error("[Runner] Error limpiando runs huérfanos:", err);
+  }
 }

@@ -7,7 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { runEmitter, isRunActive } from "../automation/runner";
+import { runEmitter, isRunActive, cleanupOrphanedRuns } from "../automation/runner";
 import { getRunLogs, getRunById } from "../db";
 import { jwtVerify } from "jose";
 import { COOKIE_NAME } from "@shared/const";
@@ -124,6 +124,8 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    // Limpiar runs huérfanos de reinicios anteriores
+    cleanupOrphanedRuns().catch(console.error);
   });
 }
 

@@ -49,3 +49,5 @@
 - [x] Añadir número de versión visible en el panel de control
 - [x] Corregir definitivamente el motor de automatización (fallo recurrente)
 - [x] Actualizar lógica de validación para usar flujo real de Nalanda (js-validar-parte + confirmación Aceptar)
+- [x] Limpiar runs huérfanos en estado "running" al arrancar el servidor
+- [x] Recuperación automática de runs bloqueados al iniciar nueva ejecución
