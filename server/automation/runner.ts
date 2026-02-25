@@ -55,17 +55,26 @@ function sendError(message) {
 }
 
 function findChromiumExecutable() {
-  const paths = [
+  // Primero intentar el binario de Playwright (disponible en produccion)
+  const playwrightPaths = [
+    // Playwright chromium headless shell (instalado por postinstall)
+    '/home/ubuntu/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell',
+    '/root/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell',
+    // Playwright chromium normal
+    '/home/ubuntu/.cache/ms-playwright/chromium-1208/chrome-linux/chrome',
+    '/root/.cache/ms-playwright/chromium-1208/chrome-linux/chrome',
+    // Rutas de sistema como fallback
     '/usr/bin/chromium-browser',
     '/usr/lib/chromium-browser/chromium-browser',
     '/usr/bin/chromium',
     '/usr/bin/google-chrome',
     '/usr/bin/google-chrome-stable',
   ];
-  for (const p of paths) {
+  for (const p of playwrightPaths) {
     try { accessSync(p); return p; } catch { /* siguiente */ }
   }
-  throw new Error('No se encontro Chromium instalado en el sistema');
+  // Ultimo recurso: dejar que Playwright encuentre el ejecutable automaticamente
+  return null;
 }
 
 function getMonthsToReview(monthsBack) {
@@ -112,32 +121,31 @@ async function login(page, username, password) {
   }
 }
 
-async function getRedDaysFromCalendar(page) {
-  await page.click('#fecha');
-  await page.waitForSelector('.ui-datepicker-calendar', { timeout: 8000 });
-  await page.waitForTimeout(500);
-
-  const redDays = await page.evaluate(() => {
-    const cal = document.querySelector('.ui-datepicker-calendar');
-    if (!cal) return [];
-    const days = [];
-    Array.from(cal.querySelectorAll('td[data-handler="selectDay"]')).forEach(td => {
-      const a = td.querySelector('a');
-      if (!a) return;
-      const bg = window.getComputedStyle(a).backgroundColor;
-      if (bg === 'rgb(255, 0, 0)' || bg === 'rgb(220, 53, 69)' || bg === 'rgb(255, 68, 68)') {
-        const month = parseInt(td.getAttribute('data-month') || '0') + 1;
-        const yr = td.getAttribute('data-year') || '';
-        const day = a.textContent?.trim().padStart(2, '0') || '';
-        days.push(day + '/' + String(month).padStart(2, '0') + '/' + yr);
-      }
-    });
-    return days;
+// Lee las fechas pendientes directamente del campo oculto #fechasConJornadas
+// que Nalanda incluye en el HTML con todas las fechas pendientes en formato YYYY-MM-DD
+async function getPendingDatesFromPage(page) {
+  const rawValue = await page.evaluate(() => {
+    const campo = document.getElementById('fechasConJornadas');
+    return campo ? campo.value : '';
   });
-
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
-  return redDays;
+  
+  if (!rawValue || rawValue.trim() === '[]' || rawValue.trim() === '') return [];
+  
+  // El valor tiene formato: [2025-01-31, 2025-02-28, ...]
+  // Usamos split/join en lugar de regex para evitar problemas de escape en template literal
+  const cleaned = rawValue.split('[').join('').split(']').join('').trim();
+  if (!cleaned) return [];
+  
+  const dates = cleaned.split(',').map(d => d.trim()).filter(Boolean);
+  
+  // Convertir de YYYY-MM-DD a DD/MM/YYYY para las URLs de Nalanda
+  return dates.map(d => {
+    const parts = d.split('-');
+    if (parts.length === 3) {
+      return parts[2] + '/' + parts[1] + '/' + parts[0]; // DD/MM/YYYY
+    }
+    return d;
+  });
 }
 
 // Valida todos los partes en la página mostrarJornadasValidables
@@ -251,8 +259,19 @@ async function processDay(page, date, retries = 3) {
         return { date, workersValidated: 0, obras: [] };
       }
 
-      // Buscar botones "Validate working days" (lista de obras)
-      const validateButtons = await page.$$('button.js-validar-jornadas, a:has-text("Validate working days"), button:has-text("Validate working days")');
+      // Buscar botones "Validate working days" visibles (la clase real es js-validarJornada)
+      // Hay botones ocultos en el DOM (top=0, sin dimensiones) que causan timeout - solo usar visibles
+      const getVisibleBtns = async () => {
+        const allBtns = await page.$$('.js-validarJornada, button.js-validar-jornadas');
+        const visible = [];
+        for (const btn of allBtns) {
+          const box = await btn.boundingBox();
+          if (box && box.width > 0 && box.height > 0 && box.y > 50) visible.push(btn);
+        }
+        return visible;
+      };
+
+      const validateButtons = await getVisibleBtns();
       if (validateButtons.length === 0) {
         sendLog('warning', 'Dia ' + date + ': no se encontraron obras pendientes');
         return { date, workersValidated: 0, obras: [] };
@@ -268,7 +287,8 @@ async function processDay(page, date, retries = 3) {
         await page.goto(PENDING_URL + '?fechaStr=' + date, { waitUntil: 'domcontentloaded', timeout: 25000 });
         await page.waitForTimeout(1500);
 
-        const btns = await page.$$('button.js-validar-jornadas, a:has-text("Validate working days"), button:has-text("Validate working days")');
+        // Solo botones visibles (con bounding box real, no los ocultos en top=0)
+        const btns = await getVisibleBtns();
         if (btns.length === 0) {
           sendLog('info', 'Dia ' + date + ': todas las obras procesadas');
           break;
@@ -280,6 +300,9 @@ async function processDay(page, date, retries = 3) {
         });
 
         sendLog('info', '  Obra ' + (i+1) + '/' + numObras + ': ' + obraName.substring(0, 50) + '...');
+        // Scroll y clic en el primer botón visible
+        await btns[0].scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
         await btns[0].click();
 
         try {
@@ -329,14 +352,20 @@ async function main() {
     sendLog('info', 'Iniciando navegador...');
 
     const executablePath = findChromiumExecutable();
-    sendLog('info', 'Usando Chromium: ' + executablePath);
+    if (executablePath) {
+      sendLog('info', 'Usando Chromium: ' + executablePath);
+    } else {
+      sendLog('info', 'Usando Chromium de Playwright (automatico)');
+    }
 
-    browser = await chromium.launch({
-      executablePath,
+    const launchOptions = {
       headless: true,
       args: CHROMIUM_ARGS,
       timeout: 30000,
-    });
+    };
+    if (executablePath) launchOptions.executablePath = executablePath;
+
+    browser = await chromium.launch(launchOptions);
 
     sendLog('success', 'Navegador iniciado correctamente');
 
@@ -349,73 +378,47 @@ async function main() {
     await login(page, username, password);
     sendProgress(5);
 
-    const now = new Date();
-    const currentMonthLabel = String(now.getMonth() + 1).padStart(2, '0') + '/' + now.getFullYear();
-    sendLog('info', 'Revisando mes actual (' + currentMonthLabel + ')...');
-
+    // Navegar a la página de partes pendientes y leer TODAS las fechas de una vez
+    sendLog('info', 'Buscando todos los partes pendientes...');
     await page.goto(PENDING_URL, { waitUntil: 'domcontentloaded', timeout: 20000 });
     await page.waitForTimeout(1500);
 
-    let currentRedDays = [];
-    try { currentRedDays = await getRedDaysFromCalendar(page); } catch (e) {
-      sendLog('warning', 'No se pudo leer el calendario: ' + e.message);
+    let pendingDates = [];
+    try { pendingDates = await getPendingDatesFromPage(page); } catch (e) {
+      sendLog('warning', 'No se pudo leer las fechas pendientes: ' + e.message);
     }
 
-    if (currentRedDays.length > 0) {
-      sendLog('info', 'Mes actual: ' + currentRedDays.length + ' dia(s) pendiente(s): ' + currentRedDays.join(', '));
-      for (const date of currentRedDays) {
-        const daySummary = await processDay(page, date);
-        summary.daysByDate.push(daySummary);
-        summary.totalValidated += daySummary.workersValidated;
-      }
-      summary.monthsReviewed.push({ month: currentMonthLabel, pendingFound: true });
-    } else {
-      sendLog('success', 'Mes actual (' + currentMonthLabel + '): sin partes pendientes');
-      summary.monthsReviewed.push({ month: currentMonthLabel, pendingFound: false });
+    if (pendingDates.length === 0) {
+      sendLog('success', 'No hay partes pendientes de validacion');
+      sendProgress(100);
+      sendResult(summary);
+      return;
     }
 
-    sendProgress(15);
+    sendLog('info', 'Encontrados ' + pendingDates.length + ' dia(s) con partes pendientes: ' + pendingDates.join(', '));
+    sendProgress(10);
 
-    const monthsToReview = getMonthsToReview(monthsBack);
-    for (let i = 0; i < monthsToReview.length; i++) {
-      const { label, sampleDate } = monthsToReview[i];
-      sendLog('info', 'Revisando ' + label + '...');
-
-      await page.goto(PENDING_URL + '?fechaStr=' + sampleDate, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      await page.waitForTimeout(1500);
-
-      let redDays = [];
-      try { redDays = await getRedDaysFromCalendar(page); } catch (e) {
-        sendLog('warning', 'No se pudo leer el calendario de ' + label + ': ' + e.message);
-      }
-
-      if (redDays.length > 0) {
-        sendLog('info', label + ': ' + redDays.length + ' dia(s) pendiente(s): ' + redDays.join(', '));
-        for (const date of redDays) {
-          const daySummary = await processDay(page, date);
-          summary.daysByDate.push(daySummary);
-          summary.totalValidated += daySummary.workersValidated;
-        }
-        summary.monthsReviewed.push({ month: label, pendingFound: true });
-      } else {
-        sendLog('success', label + ': sin partes pendientes');
-        summary.monthsReviewed.push({ month: label, pendingFound: false });
-      }
-
-      sendProgress(15 + Math.round(((i + 1) / monthsBack) * 75));
+    for (let i = 0; i < pendingDates.length; i++) {
+      const date = pendingDates[i];
+      const daySummary = await processDay(page, date);
+      summary.daysByDate.push(daySummary);
+      summary.totalValidated += daySummary.workersValidated;
+      summary.monthsReviewed.push({ month: date, pendingFound: daySummary.workersValidated > 0 });
+      sendProgress(10 + Math.round(((i + 1) / pendingDates.length) * 80));
     }
 
-    sendLog('info', 'Realizando verificacion final del mes actual...');
+    // Verificacion final: comprobar que no quedan partes pendientes
+    sendLog('info', 'Realizando verificacion final...');
     await page.goto(PENDING_URL, { waitUntil: 'domcontentloaded', timeout: 20000 });
     await page.waitForTimeout(1500);
 
-    let finalRedDays = [];
-    try { finalRedDays = await getRedDaysFromCalendar(page); } catch { /* ignorar */ }
+    let remainingDates = [];
+    try { remainingDates = await getPendingDatesFromPage(page); } catch { /* ignorar */ }
 
-    if (finalRedDays.length === 0) {
+    if (remainingDates.length === 0) {
       sendLog('success', 'Verificacion final: no quedan partes pendientes');
     } else {
-      sendLog('warning', 'Verificacion final: aun hay ' + finalRedDays.length + ' dia(s) en rojo.');
+      sendLog('warning', 'Verificacion final: aun quedan ' + remainingDates.length + ' dia(s) pendiente(s): ' + remainingDates.join(', '));
     }
 
     sendLog('success', 'Proceso completado. Total: ' + summary.totalValidated + ' parte(s) validado(s) en ' + summary.daysByDate.filter(d => d.workersValidated > 0).length + ' dia(s)');

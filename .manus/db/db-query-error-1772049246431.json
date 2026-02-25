@@ -1,0 +1,8 @@
+{
+  "query": "\nSELECT r.id, r.status, r.started_at, r.finished_at, r.error_message,\n       l.level, l.message, l.created_at\nFROM execution_runs r\nLEFT JOIN execution_logs l ON l.run_id = r.id\nORDER BY r.id DESC, l.created_at ASC\nLIMIT 50;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26MKFXK3NHGK4Mm.8bc37402212b --database nv4gyYQKYkRgZu6uoTERXf --execute \nSELECT r.id, r.status, r.started_at, r.finished_at, r.error_message,\n       l.level, l.message, l.created_at\nFROM execution_runs r\nLEFT JOIN execution_logs l ON l.run_id = r.id\nORDER BY r.id DESC, l.created_at ASC\nLIMIT 50;\n",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 2: Unknown column 'l.run_id' in 'on clause'"
+  ]
+}

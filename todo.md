@@ -51,3 +51,10 @@
 - [x] Actualizar lógica de validación para usar flujo real de Nalanda (js-validar-parte + confirmación Aceptar)
 - [x] Limpiar runs huérfanos en estado "running" al arrancar el servidor
 - [x] Recuperación automática de runs bloqueados al iniciar nueva ejecución
+- [x] Simular flujo completo manualmente en Nalanda y mapear todos los casos reales
+- [x] Corregir el worker para que detecte y valide correctamente todos los partes pendientes
+- [x] Verificar que el proceso automatizado valida partes reales: 6 partes validados en run 210005
+- [x] Instalar binarios de Playwright para que funcione en producción (sin depender de Chromium del sistema)
+- [x] Limpiar run huérfano 210002
+- [x] Corregir parseo de fechas con corchetes (split/join en lugar de regex)
+- [x] Corregir selector de botones para usar solo botones visibles (boundingBox > 0)

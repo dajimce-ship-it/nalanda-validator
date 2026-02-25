@@ -1,0 +1,46 @@
+{
+  "query": "\nSELECT r.id, r.status, r.startedAt, r.finishedAt, r.errorMessage,\n       l.level, l.message\nFROM execution_runs r\nLEFT JOIN execution_logs l ON l.runId = r.id\nWHERE r.id = (SELECT MAX(id) FROM execution_runs)\nORDER BY l.createdAt ASC;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26MKFXK3NHGK4Mm.8bc37402212b --database nv4gyYQKYkRgZu6uoTERXf --execute \nSELECT r.id, r.status, r.startedAt, r.finishedAt, r.errorMessage,\n       l.level, l.message\nFROM execution_runs r\nLEFT JOIN execution_logs l ON l.runId = r.id\nWHERE r.id = (SELECT MAX(id) FROM execution_runs)\nORDER BY l.createdAt ASC;\n",
+  "rows": [
+    {
+      "id": "210002",
+      "status": "running",
+      "startedAt": "2026-02-25 19:54:13",
+      "finishedAt": "NULL",
+      "errorMessage": "NULL",
+      "level": "info",
+      "message": "Navegando a Nalanda Global..."
+    },
+    {
+      "id": "210002",
+      "status": "running",
+      "startedAt": "2026-02-25 19:54:13",
+      "finishedAt": "NULL",
+      "errorMessage": "NULL",
+      "level": "success",
+      "message": "Navegador iniciado correctamente"
+    },
+    {
+      "id": "210002",
+      "status": "running",
+      "startedAt": "2026-02-25 19:54:13",
+      "finishedAt": "NULL",
+      "errorMessage": "NULL",
+      "level": "info",
+      "message": "Usando Chromium: /usr/bin/chromium-browser"
+    },
+    {
+      "id": "210002",
+      "status": "running",
+      "startedAt": "2026-02-25 19:54:13",
+      "finishedAt": "NULL",
+      "errorMessage": "NULL",
+      "level": "info",
+      "message": "Iniciando navegador..."
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tstatus\tstartedAt\tfinishedAt\terrorMessage\tlevel\tmessage\n210002\trunning\t2026-02-25 19:54:13\tNULL\tNULL\tinfo\tNavegando a Nalanda Global...\n210002\trunning\t2026-02-25 19:54:13\tNULL\tNULL\tsuccess\tNavegador iniciado correctamente\n210002\trunning\t2026-02-25 19:54:13\tNULL\tNULL\tinfo\tUsando Chromium: /usr/bin/chromium-browser\n210002\trunning\t2026-02-25 19:54:13\tNULL\tNULL\tinfo\tIniciando navegador...\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}
