@@ -291,10 +291,16 @@ export async function runNalandaAutomation(
     } catch {
       // Estrategia 2: lanzar nuestro propio Chromium del sistema
       log(callbacks, "info", "Puerto CDP no disponible, lanzando Chromium propio...");
+      // Diagnóstico: registrar qué rutas se están probando
+      const pathResults: string[] = [];
+      for (const p of CHROMIUM_PATHS) {
+        try { accessSync(p); pathResults.push(`OK:${p}`); } catch (e) { pathResults.push(`FAIL:${p}:${(e as Error).message}`); }
+      }
+      log(callbacks, "info", `Rutas Chromium probadas: ${pathResults.join(' | ')}`);
       const chromiumExec = CHROMIUM_PATHS.find(p => {
         try { accessSync(p); return true; } catch { return false; }
       });
-      if (!chromiumExec) throw new Error("No se encontró Chromium instalado en el sistema");
+      if (!chromiumExec) throw new Error(`No se encontró Chromium instalado en el sistema. Rutas probadas: ${pathResults.join(', ')}`);
 
       ownChromiumProc = spawn(chromiumExec, [
         `--remote-debugging-port=${OWN_CDP_PORT}`,
