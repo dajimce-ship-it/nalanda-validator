@@ -1,9 +1,20 @@
-import { chromium, Browser, BrowserContext, Page } from "playwright";
+import { Browser, BrowserContext, Page, chromium } from "playwright";
+import { spawn } from "child_process";
+import { promisify } from "util";
+const sleep = promisify(setTimeout);
 
 const NALANDA_URL = "https://app.nalandaglobal.com";
 const PENDING_URL = `${NALANDA_URL}/obra-guiada/verObrasConJornadasPendientes.action`;
-// Puerto de debugging del Chromium del sistema que siempre está corriendo en el sandbox
 const CDP_URL = "http://localhost:9222";
+// Puerto alternativo para Chromium propio si el sistema no tiene el 9222 activo
+const OWN_CDP_PORT = 9333;
+// Rutas posibles del Chromium del sistema
+const CHROMIUM_PATHS = [
+  "/usr/bin/chromium-browser",
+  "/usr/bin/chromium",
+  "/usr/lib/chromium-browser/chromium-browser",
+  "/usr/bin/google-chrome",
+];
 
 export type LogLevel = "info" | "success" | "warning" | "error";
 
@@ -267,13 +278,51 @@ export async function runNalandaAutomation(
 
   let browser: Browser | null = null;
   let context: BrowserContext | null = null;
+  let ownChromiumProc: ReturnType<typeof spawn> | null = null;
 
   try {
-    log(callbacks, "info", "Conectando al navegador del sistema...");
+    log(callbacks, "info", "Iniciando navegador...");
 
-    // Conectar al Chromium del sistema via CDP (siempre disponible en el sandbox)
-    browser = await chromium.connectOverCDP(CDP_URL);
-    log(callbacks, "success", "Navegador conectado correctamente");
+    // Estrategia 1: conectar al Chromium del sistema via CDP (puerto 9222)
+    try {
+      browser = await chromium.connectOverCDP(CDP_URL, { timeout: 5000 });
+      log(callbacks, "success", "Navegador del sistema conectado (CDP)");
+    } catch {
+      // Estrategia 2: lanzar nuestro propio Chromium del sistema
+      log(callbacks, "info", "Puerto CDP no disponible, lanzando Chromium propio...");
+      const chromiumExec = CHROMIUM_PATHS.find(p => {
+        try { require("fs").accessSync(p); return true; } catch { return false; }
+      });
+      if (!chromiumExec) throw new Error("No se encontró Chromium instalado en el sistema");
+
+      ownChromiumProc = spawn(chromiumExec, [
+        `--remote-debugging-port=${OWN_CDP_PORT}`,
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--headless=new",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-extensions",
+        `--user-data-dir=/tmp/nalanda-chrome-${Date.now()}`,
+      ], { detached: false, stdio: "ignore" });
+
+      // Esperar a que el puerto esté disponible (hasta 10 segundos)
+      let connected = false;
+      for (let i = 0; i < 20; i++) {
+        await sleep(500);
+        try {
+          browser = await chromium.connectOverCDP(`http://localhost:${OWN_CDP_PORT}`, { timeout: 2000 });
+          connected = true;
+          break;
+        } catch { /* seguir esperando */ }
+      }
+      if (!connected || !browser) throw new Error("No se pudo conectar al Chromium propio tras 10 segundos");
+      log(callbacks, "success", "Chromium propio iniciado y conectado");
+    }
+
+    if (!browser) throw new Error("No se pudo obtener una instancia del navegador");
 
     // Crear un contexto aislado para no interferir con otras pestañas
     context = await browser.newContext({
@@ -373,10 +422,17 @@ export async function runNalandaAutomation(
 
     return summary;
   } finally {
-    // Cerrar solo el contexto aislado, no el navegador del sistema
+    // Cerrar el contexto aislado
     if (context) {
       try { await context.close(); } catch { /* ignorar */ }
     }
-    // NO cerrar el browser (es el Chromium del sistema, no uno que hayamos lanzado)
+    // Si lanzamos nuestro propio Chromium, cerrarlo también
+    if (ownChromiumProc) {
+      try { ownChromiumProc.kill(); } catch { /* ignorar */ }
+    }
+    // Si es el Chromium del sistema (CDP), NO cerrarlo
+    if (browser && !ownChromiumProc) {
+      try { await browser.close(); } catch { /* ignorar */ }
+    }
   }
 }
