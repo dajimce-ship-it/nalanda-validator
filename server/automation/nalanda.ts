@@ -1,11 +1,12 @@
 import { Browser, BrowserContext, Page, chromium } from "playwright";
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import { promisify } from "util";
-import { existsSync } from "fs";
 const sleep = promisify(setTimeout);
 
 const NALANDA_URL = "https://app.nalandaglobal.com";
 const PENDING_URL = `${NALANDA_URL}/obra-guiada/verObrasConJornadasPendientes.action`;
+const CDP_PORT = 9222;
+const SYSTEM_CHROMIUM = "/usr/lib/chromium-browser/chromium-browser";
 
 export type LogLevel = "info" | "success" | "warning" | "error";
 
@@ -53,50 +54,59 @@ function getMonthsToReview(monthsBack: number): { label: string; sampleDate: str
 }
 
 /**
- * Obtiene el ejecutable de Chromium de forma robusta.
- * 1. Usa chromium.executablePath() de Playwright (siempre correcto para el entorno actual)
- * 2. Si el archivo no existe, instala Chromium automáticamente con npx playwright install
- * 3. Devuelve la ruta verificada
+ * Verifica si el puerto CDP está disponible y responde.
  */
-async function getChromiumExecutable(callbacks: AutomationCallbacks): Promise<string> {
-  // Obtener la ruta que Playwright espera para este entorno
-  const execPath = chromium.executablePath();
-  log(callbacks, "info", `Ruta Playwright Chromium: ${execPath}`);
+async function isCdpAvailable(): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
-  if (existsSync(execPath)) {
-    log(callbacks, "success", `Chromium encontrado en: ${execPath}`);
-    return execPath;
+/**
+ * Asegura que el Chromium del sistema esté corriendo con el puerto CDP.
+ * Si no está disponible, lo lanza como proceso separado.
+ */
+async function ensureCdpAvailable(callbacks: AutomationCallbacks): Promise<void> {
+  if (await isCdpAvailable()) {
+    log(callbacks, "info", `Puerto CDP ${CDP_PORT} disponible`);
+    return;
   }
 
-  // No existe → instalar automáticamente
-  log(callbacks, "warning", "Chromium no encontrado. Instalando automáticamente (puede tardar 1-2 min)...");
-  try {
-    execSync("npx playwright install chromium --with-deps", {
-      stdio: "pipe",
-      timeout: 120000,
-      env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: process.env.HOME + "/.playwright" },
-    });
-    log(callbacks, "success", "Chromium instalado correctamente");
-  } catch (installErr) {
-    // Intentar sin --with-deps (por si falta permisos para deps del sistema)
-    try {
-      execSync("npx playwright install chromium", {
-        stdio: "pipe",
-        timeout: 120000,
-        env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: process.env.HOME + "/.playwright" },
-      });
-      log(callbacks, "success", "Chromium instalado (sin deps del sistema)");
-    } catch (e2) {
-      throw new Error(`No se pudo instalar Chromium: ${e2 instanceof Error ? e2.message : e2}`);
+  log(callbacks, "warning", `Puerto CDP ${CDP_PORT} no disponible. Lanzando Chromium del sistema...`);
+
+  // Lanzar el Chromium del sistema con el puerto de debugging
+  spawnSync("bash", [
+    "-c",
+    `nohup ${SYSTEM_CHROMIUM} \
+      --headless=new \
+      --no-sandbox \
+      --disable-setuid-sandbox \
+      --disable-dev-shm-usage \
+      --disable-gpu \
+      --remote-debugging-port=${CDP_PORT} \
+      --remote-debugging-address=127.0.0.1 \
+      --no-first-run \
+      --no-default-browser-check \
+      --disable-extensions \
+      --user-data-dir=/tmp/nalanda-chrome-data \
+      about:blank &`,
+  ], { stdio: "ignore" });
+
+  // Esperar hasta 10 segundos a que el puerto esté disponible
+  for (let i = 0; i < 20; i++) {
+    await sleep(500);
+    if (await isCdpAvailable()) {
+      log(callbacks, "success", `Chromium del sistema iniciado en puerto ${CDP_PORT}`);
+      return;
     }
   }
 
-  // Verificar que ahora sí existe
-  const newPath = chromium.executablePath();
-  if (!existsSync(newPath)) {
-    throw new Error(`Chromium instalado pero no encontrado en: ${newPath}`);
-  }
-  return newPath;
+  throw new Error(`No se pudo iniciar Chromium del sistema en puerto ${CDP_PORT}`);
 }
 
 async function login(page: Page, username: string, password: string, callbacks: AutomationCallbacks): Promise<void> {
@@ -298,30 +308,14 @@ export async function runNalandaAutomation(
   try {
     log(callbacks, "info", "Iniciando navegador...");
 
-    // Obtener ejecutable de Chromium de forma robusta (con auto-install si falta)
-    const executablePath = await getChromiumExecutable(callbacks);
+    // Asegurar que el Chromium del sistema está corriendo con CDP
+    await ensureCdpAvailable(callbacks);
 
-    // Lanzar Chromium directamente con Playwright (sin depender de CDP externo)
-    browser = await chromium.launch({
-      executablePath,
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--disable-extensions",
-        "--disable-background-networking",
-        "--disable-sync",
-        "--metrics-recording-only",
-        "--disable-default-apps",
-      ],
-    });
+    // Conectar al Chromium del sistema vía CDP (no lanzar uno nuevo)
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${CDP_PORT}`);
+    log(callbacks, "success", "Conectado al navegador del sistema vía CDP");
 
-    log(callbacks, "success", "Navegador iniciado correctamente");
-
+    // Crear un contexto de incógnito aislado para no interferir con otras pestañas
     context = await browser.newContext({
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
     });
@@ -418,12 +412,12 @@ export async function runNalandaAutomation(
     callbacks.onProgress?.(100);
 
     return summary;
+
   } finally {
+    // Cerrar el contexto pero NO el navegador (es el del sistema)
     if (context) {
       try { await context.close(); } catch { /* ignorar */ }
     }
-    if (browser) {
-      try { await browser.close(); } catch { /* ignorar */ }
-    }
+    // NO cerrar browser.close() para no matar el Chromium del sistema
   }
 }
