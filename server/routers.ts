@@ -105,6 +105,58 @@ export const appRouter = router({
     chromiumStatus: protectedProcedure.query(() => {
       return getChromiumStatus();
     }),
+
+    // Endpoint de diagnóstico para ver qué pasa en producción
+    diagnose: protectedProcedure.query(() => {
+      const { execSync } = require("child_process");
+      const os = require("os");
+      const results: Record<string, string> = {};
+
+      // Info del sistema
+      results.user = os.userInfo().username;
+      results.platform = os.platform();
+      results.homeDir = os.homedir();
+      results.tmpDir = os.tmpdir();
+      results.cwd = process.cwd();
+      results.nodeVersion = process.version;
+
+      // Verificar rutas de Chromium
+      const paths = [
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/root/.cache/ms-playwright",
+        `${os.homedir()}/.cache/ms-playwright`,
+      ];
+      for (const p of paths) {
+        results[`exists:${p}`] = existsSync(p) ? "YES" : "no";
+      }
+
+      // Intentar obtener ruta de Playwright
+      try {
+        const { chromium } = require("playwright");
+        results.playwrightExecPath = chromium.executablePath();
+        results.playwrightExecExists = existsSync(chromium.executablePath()) ? "YES" : "no";
+      } catch (e: unknown) {
+        results.playwrightError = String(e);
+      }
+
+      // Intentar instalar Chromium y capturar el error
+      try {
+        const output = execSync("npx playwright install chromium --dry-run 2>&1", { timeout: 10000 }).toString();
+        results.installDryRun = output.substring(0, 500);
+      } catch (e: unknown) {
+        results.installDryRunError = String(e).substring(0, 500);
+      }
+
+      // Espacio en disco
+      try {
+        results.diskFree = execSync("df -h / 2>&1").toString().substring(0, 200);
+      } catch {}
+
+      return results;
+    }),
   }),
 
   // ── Ejecuciones ─────────────────────────────────────────────────────────────

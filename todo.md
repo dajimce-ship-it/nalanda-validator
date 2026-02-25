@@ -66,3 +66,5 @@
 - [x] Añadir endpoint tRPC `system2.chromiumStatus` que verifique si Chromium está listo
 - [x] Mostrar indicador de estado en la UI del panel de control (listo / instalando)
 - [x] Bloquear el botón "Iniciar validación" hasta que Chromium esté listo
+- [ ] Investigar por qué falla Chromium en producción y encontrar solución definitiva
+- [ ] Implementar solución que funcione en el servidor de Manus sin Chromium del sistema
