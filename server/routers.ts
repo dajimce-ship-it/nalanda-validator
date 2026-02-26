@@ -1,24 +1,20 @@
-import { z } from "zod";
-import { execSync } from "child_process";
 import { existsSync } from "fs";
-import bcrypt from "bcryptjs";
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
+import z from "zod";
 import {
   saveCredentials, getCredentials, getRuns, getRunById, getRunLogs,
   getSchedule, saveSchedule, toggleSchedule,
-  getUserByEmail, createUserWithPassword
 } from "./db";
 import { encrypt, decrypt } from "./automation/crypto";
 import { startRun } from "./automation/runner";
 
+// Usuario del sistema fijo — sin autenticación
+const SYSTEM_USER_ID = 1;
+
 // Verificar si Chromium está disponible en el sistema
 function getChromiumStatus(): { ready: boolean; message: string } {
-  // Rutas del sistema
   const systemPaths = [
     "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
@@ -28,7 +24,6 @@ function getChromiumStatus(): { ready: boolean; message: string } {
   for (const p of systemPaths) {
     if (existsSync(p)) return { ready: true, message: "Chromium listo" };
   }
-  // Ruta de Playwright
   try {
     const { chromium } = require("playwright");
     const execPath: string = chromium.executablePath();
@@ -41,70 +36,30 @@ export const appRouter = router({
   system: systemRouter,
 
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return { success: true } as const;
-    }),
-
-    register: publicProcedure
-      .input(z.object({
-        email: z.string().email(),
-        name: z.string().min(1).max(100),
-        password: z.string().min(8),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const existing = await getUserByEmail(input.email);
-        if (existing) throw new TRPCError({ code: "CONFLICT", message: "Este email ya está registrado" });
-        const passwordHash = await bcrypt.hash(input.password, 12);
-        const user = await createUserWithPassword({ email: input.email, name: input.name, passwordHash });
-        if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Error al crear el usuario" });
-        const sessionToken = await sdk.createSessionToken(`email:${input.email}`, { name: input.name, expiresInMs: ONE_YEAR_MS });
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-        return { success: true, user: { id: user.id, email: user.email, name: user.name } };
-      }),
-
-    login: publicProcedure
-      .input(z.object({
-        email: z.string().email(),
-        password: z.string().min(1),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const user = await getUserByEmail(input.email);
-        if (!user || !user.passwordHash) throw new TRPCError({ code: "UNAUTHORIZED", message: "Email o contraseña incorrectos" });
-        const valid = await bcrypt.compare(input.password, user.passwordHash);
-        if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Email o contraseña incorrectos" });
-        const sessionToken = await sdk.createSessionToken(`email:${input.email}`, { name: user.name || "", expiresInMs: ONE_YEAR_MS });
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-        return { success: true, user: { id: user.id, email: user.email, name: user.name } };
-      }),
+    me: publicProcedure.query(() => null),
+    logout: publicProcedure.mutation(() => ({ success: true } as const)),
   }),
 
   // ── Credenciales ────────────────────────────────────────────────────────────
   credentials: router({
-    save: protectedProcedure
+    save: publicProcedure
       .input(z.object({
         username: z.string().min(1),
-        password: z.string(), // puede estar vacío si se mantiene la actual
+        password: z.string(),
         monthsBack: z.number().min(1).max(24).default(6),
       }))
-      .mutation(async ({ ctx, input }) => {
-        // Si no se proporciona contraseña nueva, mantener la existente
+      .mutation(async ({ input }) => {
         let passwordEnc: string | undefined;
         if (input.password && input.password !== "KEEP_EXISTING" && input.password.trim().length > 0) {
           passwordEnc = encrypt(input.password);
         } else {
-          // Obtener la contraseña cifrada existente
-          const existing = await getCredentials(ctx.user.id);
+          const existing = await getCredentials(SYSTEM_USER_ID);
           if (!existing) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "La contraseña es obligatoria para la primera configuración" });
           }
           passwordEnc = existing.nalandaPasswordEnc;
         }
-        await saveCredentials(ctx.user.id, {
+        await saveCredentials(SYSTEM_USER_ID, {
           nalandaUsername: input.username,
           nalandaPasswordEnc: passwordEnc,
           monthsBack: input.monthsBack,
@@ -112,8 +67,8 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    get: protectedProcedure.query(async ({ ctx }) => {
-      const creds = await getCredentials(ctx.user.id);
+    get: publicProcedure.query(async () => {
+      const creds = await getCredentials(SYSTEM_USER_ID);
       if (!creds) return null;
       return {
         username: creds.nalandaUsername,
@@ -123,10 +78,9 @@ export const appRouter = router({
       };
     }),
 
-    test: protectedProcedure.mutation(async ({ ctx }) => {
-      const creds = await getCredentials(ctx.user.id);
+    test: publicProcedure.mutation(async () => {
+      const creds = await getCredentials(SYSTEM_USER_ID);
       if (!creds) throw new TRPCError({ code: "NOT_FOUND", message: "No hay credenciales configuradas" });
-      // Test básico: verificar que se pueden descifrar
       try {
         const pwd = decrypt(creds.nalandaPasswordEnc);
         if (!pwd) throw new Error("Contraseña vacía");
@@ -139,17 +93,15 @@ export const appRouter = router({
 
   // ── Estado del sistema ────────────────────────────────────────────────────
   system2: router({
-    chromiumStatus: protectedProcedure.query(() => {
+    chromiumStatus: publicProcedure.query(() => {
       return getChromiumStatus();
     }),
 
-    // Endpoint de diagnóstico para ver qué pasa en producción
-    diagnose: protectedProcedure.query(() => {
+    diagnose: publicProcedure.query(() => {
       const { execSync } = require("child_process");
       const os = require("os");
       const results: Record<string, string> = {};
 
-      // Info del sistema
       results.user = os.userInfo().username;
       results.platform = os.platform();
       results.homeDir = os.homedir();
@@ -157,7 +109,6 @@ export const appRouter = router({
       results.cwd = process.cwd();
       results.nodeVersion = process.version;
 
-      // Verificar rutas de Chromium
       const paths = [
         "/usr/bin/chromium-browser",
         "/usr/bin/chromium",
@@ -170,7 +121,6 @@ export const appRouter = router({
         results[`exists:${p}`] = existsSync(p) ? "YES" : "no";
       }
 
-      // Intentar obtener ruta de Playwright
       try {
         const { chromium } = require("playwright");
         results.playwrightExecPath = chromium.executablePath();
@@ -179,7 +129,6 @@ export const appRouter = router({
         results.playwrightError = String(e);
       }
 
-      // Intentar instalar Chromium y capturar el error
       try {
         const output = execSync("npx playwright install chromium --dry-run 2>&1", { timeout: 10000 }).toString();
         results.installDryRun = output.substring(0, 500);
@@ -187,7 +136,6 @@ export const appRouter = router({
         results.installDryRunError = String(e).substring(0, 500);
       }
 
-      // Espacio en disco
       try {
         results.diskFree = execSync("df -h / 2>&1").toString().substring(0, 200);
       } catch {}
@@ -198,44 +146,40 @@ export const appRouter = router({
 
   // ── Ejecuciones ─────────────────────────────────────────────────────────────
   runs: router({
-    start: protectedProcedure
+    start: publicProcedure
       .input(z.object({ triggeredBy: z.enum(["manual", "scheduled"]).default("manual") }))
-      .mutation(async ({ ctx, input }) => {
-        const runId = await startRun(ctx.user.id, input.triggeredBy);
+      .mutation(async ({ input }) => {
+        const runId = await startRun(SYSTEM_USER_ID, input.triggeredBy);
         return { runId };
       }),
 
-    list: protectedProcedure
+    list: publicProcedure
       .input(z.object({ limit: z.number().min(1).max(100).default(20) }))
-      .query(async ({ ctx, input }) => {
-        return getRuns(ctx.user.id, input.limit);
+      .query(async ({ input }) => {
+        return getRuns(SYSTEM_USER_ID, input.limit);
       }),
 
-    get: protectedProcedure
+    get: publicProcedure
       .input(z.object({ runId: z.number() }))
-      .query(async ({ ctx, input }) => {
+      .query(async ({ input }) => {
         const run = await getRunById(input.runId);
-        if (!run || run.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        if (!run) throw new TRPCError({ code: "NOT_FOUND" });
         return run;
       }),
 
-    logs: protectedProcedure
+    logs: publicProcedure
       .input(z.object({ runId: z.number() }))
-      .query(async ({ ctx, input }) => {
+      .query(async ({ input }) => {
         const run = await getRunById(input.runId);
-        if (!run || run.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
+        if (!run) throw new TRPCError({ code: "NOT_FOUND" });
         return getRunLogs(input.runId);
       }),
   }),
 
   // ── Programación ────────────────────────────────────────────────────────────
   schedule: router({
-    get: protectedProcedure.query(async ({ ctx }) => {
-      const sched = await getSchedule(ctx.user.id);
+    get: publicProcedure.query(async () => {
+      const sched = await getSchedule(SYSTEM_USER_ID);
       return sched ?? {
         enabled: false,
         cronExpression: "0 8 * * 1-5",
@@ -245,21 +189,21 @@ export const appRouter = router({
       };
     }),
 
-    save: protectedProcedure
+    save: publicProcedure
       .input(z.object({
         cronExpression: z.string().min(1),
         timezone: z.string().min(1),
         enabled: z.boolean(),
       }))
-      .mutation(async ({ ctx, input }) => {
-        await saveSchedule(ctx.user.id, input);
+      .mutation(async ({ input }) => {
+        await saveSchedule(SYSTEM_USER_ID, input);
         return { success: true };
       }),
 
-    toggle: protectedProcedure
+    toggle: publicProcedure
       .input(z.object({ enabled: z.boolean() }))
-      .mutation(async ({ ctx, input }) => {
-        await toggleSchedule(ctx.user.id, input.enabled);
+      .mutation(async ({ input }) => {
+        await toggleSchedule(SYSTEM_USER_ID, input.enabled);
         return { success: true };
       }),
   }),

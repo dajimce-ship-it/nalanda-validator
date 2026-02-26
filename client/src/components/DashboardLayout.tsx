@@ -1,11 +1,3 @@
-import { useAuth } from "@/_core/hooks/useAuth";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -18,13 +10,10 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { CalendarCheck, Clock, Home, KeyRound, LogOut } from "lucide-react";
+import { CalendarCheck, Clock, Home, KeyRound } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
-import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: Home, label: "Panel de control", path: "/" },
@@ -47,32 +36,10 @@ export default function DashboardLayout({
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
-  const { loading, user } = useAuth();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
-
-  if (loading) {
-    return <DashboardLayoutSkeleton />;
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <CalendarCheck className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">Nalanda Validator</h1>
-          </div>
-          <p className="text-muted-foreground">Inicia sesión para acceder al panel de control</p>
-          <Button asChild size="lg">
-            <a href="/login">Iniciar sesión</a>
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <SidebarProvider
@@ -83,7 +50,6 @@ export default function DashboardLayout({
         <header className="flex h-14 items-center gap-2 border-b px-4 bg-card">
           <SidebarTrigger className="-ml-1" />
           <div className="flex-1" />
-          <span className="text-sm text-muted-foreground">{user.name || user.email}</span>
         </header>
         <main className="flex-1 p-6 bg-background">
           {children}
@@ -101,7 +67,6 @@ function AppSidebar({
   setSidebarWidth: (w: number) => void;
 }) {
   const [location, navigate] = useLocation();
-  const { logout } = useAuth();
   const isMobile = useIsMobile();
   const isResizing = useRef(false);
 
@@ -157,16 +122,7 @@ function AppSidebar({
         </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter className="px-2 py-3">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={logout} className="gap-3 text-sidebar-foreground/70 hover:text-sidebar-foreground">
-              <LogOut className="h-4 w-4" />
-              <span>Cerrar sesión</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+      <SidebarFooter className="px-2 py-3" />
 
       {/* Resize handle */}
       {!isMobile && (

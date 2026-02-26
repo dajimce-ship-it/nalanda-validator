@@ -77,4 +77,9 @@
 - [x] Añadir campo password_hash al schema de usuarios
 - [x] Implementar endpoints de registro y login con bcrypt + JWT
 - [x] Implementar frontend de login/registro sin dependencia de Manus OAuth
-- [ ] Subir cambios a GitHub y verificar redespliegue en Railway
+- [x] Subir cambios a GitHub y verificar redespliegue en Railway
+
+## Sin autenticación (acceso libre)
+- [x] Eliminar guards de autenticación en frontend (DashboardLayout, rutas)
+- [x] Hacer todas las rutas del backend públicas (publicProcedure)
+- [ ] Subir a GitHub y redesplegar en Railway

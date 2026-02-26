@@ -8,12 +8,10 @@ import Home from "./pages/Home";
 import Credentials from "./pages/Credentials";
 import History from "./pages/History";
 import Schedule from "./pages/Schedule";
-import Login from "./pages/Login";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/login" component={Login} />
       <Route path="/" component={Home} />
       <Route path="/credentials" component={Credentials} />
       <Route path="/history" component={History} />

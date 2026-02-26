@@ -1,7 +1,6 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import { encrypt, decrypt } from "./automation/crypto";
 import { appRouter } from "./routers";
-import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
 
 // ── Crypto tests ──────────────────────────────────────────────────────────────
@@ -20,7 +19,7 @@ describe("crypto", () => {
     const password = "SamePassword";
     const enc1 = encrypt(password);
     const enc2 = encrypt(password);
-    expect(enc1).not.toBe(enc2); // IV aleatorio → diferente cada vez
+    expect(enc1).not.toBe(enc2);
     expect(decrypt(enc1)).toBe(password);
     expect(decrypt(enc2)).toBe(password);
   });
@@ -35,62 +34,30 @@ describe("crypto", () => {
   });
 });
 
-// ── Auth router tests ─────────────────────────────────────────────────────────
+// ── Contexto público (sin usuario) ───────────────────────────────────────────
 
-type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
-
-function createAuthContext(): { ctx: TrpcContext; clearedCookies: { name: string; options: Record<string, unknown> }[] } {
-  const clearedCookies: { name: string; options: Record<string, unknown> }[] = [];
-  const user: AuthenticatedUser = {
-    id: 1,
-    openId: "test-user-openid",
-    email: "test@example.com",
-    name: "Test User",
-    loginMethod: "manus",
-    role: "user",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
-  };
-  const ctx: TrpcContext = {
-    user,
+function createPublicContext(): TrpcContext {
+  return {
+    user: null,
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
-    res: {
-      clearCookie: (name: string, options: Record<string, unknown>) => {
-        clearedCookies.push({ name, options });
-      },
-    } as TrpcContext["res"],
+    res: { clearCookie: () => {} } as unknown as TrpcContext["res"],
   };
-  return { ctx, clearedCookies };
 }
 
+// ── Auth router tests ─────────────────────────────────────────────────────────
+
 describe("auth.logout", () => {
-  it("clears session cookie and returns success", async () => {
-    const { ctx, clearedCookies } = createAuthContext();
+  it("returns success without requiring authentication", async () => {
+    const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
     const result = await caller.auth.logout();
     expect(result).toEqual({ success: true });
-    expect(clearedCookies).toHaveLength(1);
-    expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
-    expect(clearedCookies[0]?.options).toMatchObject({ maxAge: -1, httpOnly: true, path: "/" });
   });
 });
 
 describe("auth.me", () => {
-  it("returns the current user when authenticated", async () => {
-    const { ctx } = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-    const user = await caller.auth.me();
-    expect(user).not.toBeNull();
-    expect(user?.email).toBe("test@example.com");
-  });
-
-  it("returns null when not authenticated", async () => {
-    const ctx: TrpcContext = {
-      user: null,
-      req: { protocol: "https", headers: {} } as TrpcContext["req"],
-      res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
-    };
+  it("returns null (no authentication required)", async () => {
+    const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
     const user = await caller.auth.me();
     expect(user).toBeNull();
@@ -100,28 +67,23 @@ describe("auth.me", () => {
 // ── Credentials router tests ──────────────────────────────────────────────────
 
 describe("credentials.save", () => {
-  it("requires authentication", async () => {
-    const ctx: TrpcContext = {
-      user: null,
-      req: { protocol: "https", headers: {} } as TrpcContext["req"],
-      res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
-    };
+  it("is accessible without authentication", async () => {
+    const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
+    // Debe resolver (no rechazar) — acceso libre
     await expect(
       caller.credentials.save({ username: "test@test.com", password: "pass123", monthsBack: 6 })
-    ).rejects.toThrow();
+    ).resolves.toEqual({ success: true });
   });
 });
 
 describe("credentials.get", () => {
-  it("requires authentication", async () => {
-    const ctx: TrpcContext = {
-      user: null,
-      req: { protocol: "https", headers: {} } as TrpcContext["req"],
-      res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
-    };
+  it("is accessible without authentication", async () => {
+    const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
-    await expect(caller.credentials.get()).rejects.toThrow();
+    // Debe resolver (puede ser null si no hay credenciales guardadas)
+    const result = await caller.credentials.get();
+    expect(result === null || typeof result === "object").toBe(true);
   });
 });
 
@@ -129,7 +91,7 @@ describe("credentials.get", () => {
 
 describe("schedule.save", () => {
   it("validates cron expression is not empty", async () => {
-    const { ctx } = createAuthContext();
+    const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
     await expect(
       caller.schedule.save({ cronExpression: "", timezone: "Europe/Madrid", enabled: false })
@@ -138,13 +100,11 @@ describe("schedule.save", () => {
 });
 
 describe("runs.start", () => {
-  it("requires authentication", async () => {
-    const ctx: TrpcContext = {
-      user: null,
-      req: { protocol: "https", headers: {} } as TrpcContext["req"],
-      res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
-    };
+  it("is accessible without authentication and starts a run", async () => {
+    const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
-    await expect(caller.runs.start({ triggeredBy: "manual" })).rejects.toThrow();
+    const result = await caller.runs.start({ triggeredBy: "manual" });
+    expect(result).toHaveProperty("runId");
+    expect(typeof result.runId).toBe("number");
   });
 });
