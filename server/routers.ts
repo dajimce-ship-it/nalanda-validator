@@ -15,6 +15,7 @@ const SYSTEM_USER_ID = 1;
 
 // Verificar si Chromium está disponible en el sistema
 function getChromiumStatus(): { ready: boolean; message: string } {
+  // 1. Rutas del sistema
   const systemPaths = [
     "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
@@ -24,10 +25,28 @@ function getChromiumStatus(): { ready: boolean; message: string } {
   for (const p of systemPaths) {
     if (existsSync(p)) return { ready: true, message: "Chromium listo" };
   }
+  // 2. Playwright con PLAYWRIGHT_BROWSERS_PATH (Dockerfile: /usr/src/app/.browsers)
   try {
     const { chromium } = require("playwright");
     const execPath: string = chromium.executablePath();
-    if (existsSync(execPath)) return { ready: true, message: "Chromium listo" };
+    if (execPath && existsSync(execPath)) return { ready: true, message: "Chromium listo" };
+  } catch {}
+  // 3. Buscar directamente en el directorio de browsers de Playwright
+  const browsersBase = process.env.PLAYWRIGHT_BROWSERS_PATH || "/usr/src/app/.browsers";
+  try {
+    const { readdirSync } = require("fs");
+    const dirs = readdirSync(browsersBase);
+    for (const dir of dirs) {
+      if (dir.startsWith("chromium")) {
+        const candidates = [
+          `${browsersBase}/${dir}/chrome-linux/chrome`,
+          `${browsersBase}/${dir}/chromium`,
+        ];
+        for (const c of candidates) {
+          if (existsSync(c)) return { ready: true, message: "Chromium listo" };
+        }
+      }
+    }
   } catch {}
   return { ready: false, message: "Chromium no instalado. El servidor lo instalará automáticamente al iniciar la primera ejecución (puede tardar 1-2 minutos)." };
 }

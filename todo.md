@@ -82,4 +82,4 @@
 ## Sin autenticación (acceso libre)
 - [x] Eliminar guards de autenticación en frontend (DashboardLayout, rutas)
 - [x] Hacer todas las rutas del backend públicas (publicProcedure)
-- [ ] Subir a GitHub y redesplegar en Railway
+- [x] Subir a GitHub y redesplegar en Railway
