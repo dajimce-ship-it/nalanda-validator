@@ -34,6 +34,7 @@ function getChromiumStatus(): { ready: boolean; message: string } {
     for (const dir of dirs) {
       if (dir.startsWith("chromium")) {
         const candidates = [
+          `${browsersBase}/${dir}/chrome-linux64/chrome`,
           `${browsersBase}/${dir}/chrome-linux/chrome`,
           `${browsersBase}/${dir}/chromium`,
           `${browsersBase}/${dir}/chrome`,

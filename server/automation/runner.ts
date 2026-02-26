@@ -56,12 +56,31 @@ function sendError(message) {
 }
 
 function findChromiumExecutable() {
-  // Intentar obtener la ruta del ejecutable de Playwright automaticamente
+  // 1. Intentar obtener la ruta del ejecutable de Playwright automaticamente
   try {
     const path = chromium.executablePath();
     if (path) { accessSync(path); return path; }
   } catch { /* continuar */ }
-  // Fallback: rutas conocidas del sistema
+  // 2. Buscar en PLAYWRIGHT_BROWSERS_PATH (Dockerfile: /usr/src/app/.browsers)
+  const browsersBase = process.env['PLAYWRIGHT_BROWSERS_PATH'] || '/usr/src/app/.browsers';
+  try {
+    const { readdirSync } = require('fs');
+    const dirs = readdirSync(browsersBase);
+    for (const dir of dirs) {
+      if (dir.startsWith('chromium') && !dir.startsWith('chromium_headless')) {
+        const candidates = [
+          browsersBase + '/' + dir + '/chrome-linux64/chrome',
+          browsersBase + '/' + dir + '/chrome-linux/chrome',
+          browsersBase + '/' + dir + '/chromium',
+          browsersBase + '/' + dir + '/chrome',
+        ];
+        for (const c of candidates) {
+          try { accessSync(c); return c; } catch { /* siguiente */ }
+        }
+      }
+    }
+  } catch { /* continuar */ }
+  // 3. Fallback: rutas conocidas del sistema
   const systemPaths = [
     '/usr/bin/chromium-browser',
     '/usr/lib/chromium-browser/chromium-browser',
