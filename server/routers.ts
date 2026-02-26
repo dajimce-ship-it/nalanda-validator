@@ -161,6 +161,10 @@ export const appRouter = router({
         results.browsersError = String(e);
       }
 
+      // Diagnóstico de base de datos
+      results.databaseUrl = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@') : '(not set)';
+      results.nodeEnv = process.env.NODE_ENV || '(not set)';
+
       try {
         results.diskFree = execSync("df -h / 2>&1").toString().substring(0, 200);
       } catch {}
