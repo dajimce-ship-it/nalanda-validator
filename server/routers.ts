@@ -6,7 +6,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import z from "zod";
 import {
-  saveCredentials, getCredentials, getRuns, getRunById, getRunLogs,
+  getDb, saveCredentials, getCredentials, getRuns, getRunById, getRunLogs,
   getSchedule, saveSchedule, toggleSchedule,
 } from "./db";
 import { encrypt, decrypt } from "./automation/crypto";
@@ -111,6 +111,19 @@ export const appRouter = router({
   system2: router({
     chromiumStatus: publicProcedure.query(() => {
       return getChromiumStatus();
+    }),
+
+    dbTest: publicProcedure.query(async () => {
+      const dbUrl = process.env.DATABASE_URL || '(not set)';
+      const maskedUrl = dbUrl.replace(/:[^:@]+@/, ':***@');
+      try {
+        const db = await getDb();
+        if (!db) return { ok: false, error: 'getDb() returned null', databaseUrl: maskedUrl };
+        const result = await db.execute('SELECT COUNT(*) as cnt FROM nalanda_credentials');
+        return { ok: true, count: (result as any)[0]?.[0]?.cnt ?? 'unknown', databaseUrl: maskedUrl };
+      } catch (e: unknown) {
+        return { ok: false, error: String(e), databaseUrl: maskedUrl };
+      }
     }),
 
     diagnose: publicProcedure.query(() => {
