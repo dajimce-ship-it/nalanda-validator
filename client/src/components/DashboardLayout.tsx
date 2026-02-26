@@ -67,7 +67,7 @@ export default function DashboardLayout({
           </div>
           <p className="text-muted-foreground">Inicia sesión para acceder al panel de control</p>
           <Button asChild size="lg">
-            <a href={getLoginUrl()}>Iniciar sesión</a>
+            <a href="/login">Iniciar sesión</a>
           </Button>
         </div>
       </div>

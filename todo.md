@@ -71,4 +71,10 @@
 - [x] Crear Dockerfile con Chromium para Railway (multi-stage build, todas las dependencias del sistema)
 - [x] Crear .dockerignore y railway.toml para configuración de Railway
 - [x] Añadir endpoint /api/health para healthcheck de Railway
-- [ ] Exportar a GitHub y desplegar en Railway (pendiente acción del usuario)
+- [x] Exportar a GitHub y desplegar en Railway (completado - nalanda-validator-production.up.railway.app)
+
+## Railway - Login con email/contraseña
+- [x] Añadir campo password_hash al schema de usuarios
+- [x] Implementar endpoints de registro y login con bcrypt + JWT
+- [x] Implementar frontend de login/registro sin dependencia de Manus OAuth
+- [ ] Subir cambios a GitHub y verificar redespliegue en Railway

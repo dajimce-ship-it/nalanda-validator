@@ -257,7 +257,6 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
-    // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);
@@ -266,11 +265,21 @@ class SDKServer {
       throw ForbiddenError("Invalid session cookie");
     }
 
-    const sessionUserId = session.openId;
     const signedInAt = new Date();
+
+    // Email/password auth: openId starts with "email:"
+    if (session.openId.startsWith("email:")) {
+      const email = session.openId.replace("email:", "");
+      const user = await db.getUserByEmail(email);
+      if (!user) throw ForbiddenError("User not found");
+      await db.updateUserLastSignedIn(user.id);
+      return user;
+    }
+
+    // Manus OAuth flow
+    const sessionUserId = session.openId;
     let user = await db.getUserByOpenId(sessionUserId);
 
-    // If user not in DB, sync from OAuth server automatically
     if (!user) {
       try {
         const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
@@ -292,10 +301,9 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
+    if (user.openId) {
+      await db.upsertUser({ openId: user.openId, lastSignedIn: signedInAt });
+    }
 
     return user;
   }
