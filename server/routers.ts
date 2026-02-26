@@ -1,4 +1,6 @@
-import { existsSync } from "fs";
+import { existsSync, readdirSync } from "fs";
+import { execSync } from "child_process";
+import os from "os";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
@@ -25,22 +27,16 @@ function getChromiumStatus(): { ready: boolean; message: string } {
   for (const p of systemPaths) {
     if (existsSync(p)) return { ready: true, message: "Chromium listo" };
   }
-  // 2. Playwright con PLAYWRIGHT_BROWSERS_PATH (Dockerfile: /usr/src/app/.browsers)
-  try {
-    const { chromium } = require("playwright");
-    const execPath: string = chromium.executablePath();
-    if (execPath && existsSync(execPath)) return { ready: true, message: "Chromium listo" };
-  } catch {}
-  // 3. Buscar directamente en el directorio de browsers de Playwright
+  // 2. Buscar en el directorio de browsers de Playwright (Dockerfile: /usr/src/app/.browsers)
   const browsersBase = process.env.PLAYWRIGHT_BROWSERS_PATH || "/usr/src/app/.browsers";
   try {
-    const { readdirSync } = require("fs");
     const dirs = readdirSync(browsersBase);
     for (const dir of dirs) {
       if (dir.startsWith("chromium")) {
         const candidates = [
           `${browsersBase}/${dir}/chrome-linux/chrome`,
           `${browsersBase}/${dir}/chromium`,
+          `${browsersBase}/${dir}/chrome`,
         ];
         for (const c of candidates) {
           if (existsSync(c)) return { ready: true, message: "Chromium listo" };
@@ -117,8 +113,6 @@ export const appRouter = router({
     }),
 
     diagnose: publicProcedure.query(() => {
-      const { execSync } = require("child_process");
-      const os = require("os");
       const results: Record<string, string> = {};
 
       results.user = os.userInfo().username;
@@ -127,7 +121,9 @@ export const appRouter = router({
       results.tmpDir = os.tmpdir();
       results.cwd = process.cwd();
       results.nodeVersion = process.version;
+      results.playwrightBrowsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH || "(not set)";
 
+      // Rutas del sistema
       const paths = [
         "/usr/bin/chromium-browser",
         "/usr/bin/chromium",
@@ -135,24 +131,33 @@ export const appRouter = router({
         "/usr/bin/google-chrome-stable",
         "/root/.cache/ms-playwright",
         `${os.homedir()}/.cache/ms-playwright`,
+        "/usr/src/app/.browsers",
       ];
       for (const p of paths) {
         results[`exists:${p}`] = existsSync(p) ? "YES" : "no";
       }
 
+      // Listar contenido de .browsers
+      const browsersBase = process.env.PLAYWRIGHT_BROWSERS_PATH || "/usr/src/app/.browsers";
       try {
-        const { chromium } = require("playwright");
-        results.playwrightExecPath = chromium.executablePath();
-        results.playwrightExecExists = existsSync(chromium.executablePath()) ? "YES" : "no";
+        const dirs = readdirSync(browsersBase);
+        results.browsersContents = dirs.join(", ");
+        for (const dir of dirs) {
+          if (dir.startsWith("chromium")) {
+            try {
+              const sub = readdirSync(`${browsersBase}/${dir}`);
+              results[`browsers/${dir}`] = sub.join(", ");
+              for (const s of sub) {
+                try {
+                  const sub2 = readdirSync(`${browsersBase}/${dir}/${s}`);
+                  results[`browsers/${dir}/${s}`] = sub2.join(", ");
+                } catch {}
+              }
+            } catch {}
+          }
+        }
       } catch (e: unknown) {
-        results.playwrightError = String(e);
-      }
-
-      try {
-        const output = execSync("npx playwright install chromium --dry-run 2>&1", { timeout: 10000 }).toString();
-        results.installDryRun = output.substring(0, 500);
-      } catch (e: unknown) {
-        results.installDryRunError = String(e).substring(0, 500);
+        results.browsersError = String(e);
       }
 
       try {
